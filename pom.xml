@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
+    <groupId>io.github.pmoustopoulos</groupId>
+    <artifactId>sftp-console-spring-boot-starter</artifactId>
+    <version>0.1.0</version>
+    <name>sftp-console-spring-boot-starter</name>
+    <description>In-memory SFTP server (Apache MINA SSHD + Jimfs) with a web console, as a Spring Boot starter</description>
+    <url>https://github.com/pmoustopoulos/sftp-console-spring-boot-starter</url>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>pmoustopoulos</id>
+            <name>Petros Moustopoulos</name>
+            <url>https://github.com/pmoustopoulos</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/pmoustopoulos/sftp-console-spring-boot-starter.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/pmoustopoulos/sftp-console-spring-boot-starter.git</developerConnection>
+        <url>https://github.com/pmoustopoulos/sftp-console-spring-boot-starter</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

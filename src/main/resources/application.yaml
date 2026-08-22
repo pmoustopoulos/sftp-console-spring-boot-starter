@@ -1,0 +1,3 @@
+spring:
+  application:
+    name: sftp-console-spring-boot-starter
