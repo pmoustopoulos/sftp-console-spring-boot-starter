@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFTP Console</title>
+    <style>
+        :root {
+            --accent: #2563eb;
+            --accent-dark: #1d4ed8;
+            --bg: #f1f5f9;
+            --panel: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #64748b;
+            --hover: #f8fafc;
+            --row-hover: #eff6ff;
+            --danger: #dc2626;
+            --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+        }
+        html[data-theme="dark"] {
+            --accent: #3b82f6;
+            --accent-dark: #2563eb;
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --hover: #263449;
+            --row-hover: #1e3a5f;
+            --danger: #ef4444;
+            --shadow: 0 1px 3px rgba(0,0,0,.4);
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text); background: var(--bg);
+            display: flex; flex-direction: column;
+        }
+        header {
+            display: flex; align-items: center; gap: 16px;
+            padding: 0 20px; height: 60px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: #fff; box-shadow: var(--shadow); flex-shrink: 0;
+        }
+        header .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+        header .brand .logo { font-size: 22px; }
+        header .spacer { flex: 1; }
+        .btn {
+            cursor: pointer; border: none; border-radius: 8px;
+            padding: 8px 14px; font-size: 13px; font-weight: 600;
+            background: rgba(255,255,255,.16); color: #fff; transition: background .15s;
+        }
+        .btn:hover { background: rgba(255,255,255,.3); }
+        .btn.danger:hover { background: var(--danger); }
+        .theme-toggle {
+            cursor: pointer; border: none; background: rgba(255,255,255,.16);
+            color: #fff; border-radius: 8px; width: 38px; height: 38px; font-size: 16px;
+        }
+        main { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; overflow: hidden; }
+        .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .toolbar .btn { background: var(--accent); }
+        .toolbar .btn:hover { background: var(--accent-dark); }
+        .toolbar .btn.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+        .toolbar .btn.secondary:hover { background: var(--hover); }
+        .breadcrumb {
+            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+            font-size: 14px; color: var(--muted);
+        }
+        .breadcrumb a { color: var(--accent); cursor: pointer; text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        .breadcrumb .sep { color: var(--muted); }
+        .panel {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; box-shadow: var(--shadow); flex: 1;
+            overflow: auto; position: relative;
+        }
+        .panel.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; }
+        tbody tr.dragging { opacity: .45; }
+        tbody tr.drop-target, .breadcrumb a.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--row-hover); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 11px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+        tbody tr:hover { background: var(--row-hover); }
+        td.name { display: flex; align-items: center; gap: 10px; }
+        td.name .icon { font-size: 18px; }
+        td.name .link { cursor: pointer; color: var(--text); font-weight: 500; }
+        td.name .link:hover { color: var(--accent); }
+        td.size, td.modified { color: var(--muted); white-space: nowrap; }
+        td.actions { text-align: right; white-space: nowrap; }
+        .icon-btn {
+            cursor: pointer; border: none; background: transparent; color: var(--muted);
+            font-size: 15px; padding: 5px 7px; border-radius: 6px;
+        }
+        .icon-btn:hover { background: var(--hover); color: var(--text); }
+        .icon-btn.danger:hover { color: var(--danger); }
+        .empty { padding: 40px; text-align: center; color: var(--muted); }
+        .overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.5);
+            display: none; align-items: center; justify-content: center; z-index: 10; padding: 20px;
+        }
+        .overlay.open { display: flex; }
+        .modal {
+            background: var(--panel); color: var(--text); border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,.3); max-width: 900px; width: 100%;
+            max-height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+        .modal header { background: var(--panel); color: var(--text); border-bottom: 1px solid var(--border); height: auto; padding: 16px 20px; }
+        .modal .body { padding: 20px; overflow: auto; }
+        .modal .body pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+        .modal .body img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+        .modal .close { margin-left: auto; }
+        /* The base .btn is white-on-transparent, styled for the coloured top bar. Inside a modal
+           (light/dark panel background) it has no contrast, so give modal buttons readable styles. */
+        .modal .btn { background: var(--accent); color: #fff; }
+        .modal .btn:hover { background: var(--accent-dark); }
+        .modal .btn.secondary, .modal .btn.close { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+        .modal .btn.secondary:hover, .modal .btn.close:hover { background: var(--hover); }
+        .prompt-input {
+            width: 100%; padding: 9px 12px; font-size: 14px; margin-top: 12px;
+            border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text);
+        }
+        .prompt-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--danger); color: #fff; padding: 10px 18px; border-radius: 8px;
+            font-size: 14px; box-shadow: var(--shadow); display: none; z-index: 20;
+        }
+        .toast.show { display: block; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="brand"><span class="logo">📁</span> SFTP Console</div>
+    <div class="spacer"></div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+</header>
+<main>
+    <div class="toolbar">
+        <button class="btn" id="uploadBtn">⬆ Upload</button>
+        <button class="btn secondary" id="newFolderBtn">➕ New folder</button>
+        <button class="btn secondary" id="refreshBtn">🔄 Refresh</button>
+        <input type="file" id="fileInput" multiple hidden>
+    </div>
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <div class="panel" id="panel">
+        <table>
+            <thead>
+            <tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" style="display:none;">This folder is empty. Drag files here or use Upload.</div>
+    </div>
+</main>
+
+<div class="overlay" id="previewOverlay">
+    <div class="modal">
+        <header><span id="previewTitle"></span><button class="btn close" id="previewClose">Close</button></header>
+        <div class="body" id="previewBody"></div>
+    </div>
+</div>
+
+<div class="overlay" id="promptOverlay">
+    <div class="modal" style="max-width:420px;">
+        <header><span id="promptTitle"></span></header>
+        <div class="body">
+            <div id="promptMessage"></div>
+            <input type="text" class="prompt-input" id="promptInput">
+            <div class="prompt-actions">
+                <button class="btn secondary" id="promptCancel">Cancel</button>
+                <button class="btn" id="promptOk">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    const BASE = "__BASE_PATH__";
+    const API = BASE + "/api/files";
+    let currentPath = "/";
+    let pollTimer = null;
+
+    // ---- theme ----
+    const themeToggle = document.getElementById("themeToggle");
+    function applyTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        themeToggle.textContent = theme === "dark" ? "☀" : "🌙";
+    }
+    (function initTheme() {
+        const saved = localStorage.getItem("sftp-console-theme");
+        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        applyTheme(saved || (prefersDark ? "dark" : "light"));
+    })();
+    themeToggle.addEventListener("click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        localStorage.setItem("sftp-console-theme", next);
+        applyTheme(next);
+    });
+
+    // ---- helpers ----
+    function toast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg; t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 3500);
+    }
+    function formatSize(bytes) {
+        if (bytes === 0) return "—";
+        const units = ["B", "KB", "MB", "GB"];
+        let i = 0, n = bytes;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(i === 0 ? 0 : 1) + " " + units[i];
+    }
+    function formatDate(iso) {
+        if (!iso) return "";
+        try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+    }
+    function joinPath(dir, name) {
+        return dir.endsWith("/") ? dir + name : dir + "/" + name;
+    }
+    async function api(method, url, options = {}) {
+        const res = await fetch(url, { method, ...options });
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(text || (res.status + " " + res.statusText));
+        }
+        return res;
+    }
+
+    // ---- breadcrumb ----
+    function renderBreadcrumb() {
+        const nav = document.getElementById("breadcrumb");
+        nav.innerHTML = "";
+        const parts = currentPath.split("/").filter(Boolean);
+        const root = document.createElement("a");
+        root.textContent = "🏠 root";
+        root.onclick = () => navigate("/");
+        makeMoveDropTarget(root, "/");
+        nav.appendChild(root);
+        let acc = "";
+        parts.forEach(part => {
+            acc += "/" + part;
+            const sep = document.createElement("span");
+            sep.className = "sep"; sep.textContent = "/";
+            nav.appendChild(sep);
+            const a = document.createElement("a");
+            a.textContent = part;
+            const target = acc;
+            a.onclick = () => navigate(target);
+            makeMoveDropTarget(a, target);
+            nav.appendChild(a);
+        });
+    }
+
+    // ---- listing ----
+    async function load() {
+        try {
+            const res = await api("GET", API + "?path=" + encodeURIComponent(currentPath));
+            const entries = await res.json();
+            renderRows(entries);
+        } catch (e) {
+            toast("Failed to load: " + e.message);
+        }
+    }
+    function renderRows(entries) {
+        const tbody = document.getElementById("rows");
+        const empty = document.getElementById("empty");
+        tbody.innerHTML = "";
+        empty.style.display = entries.length === 0 ? "block" : "none";
+        entries.forEach(entry => {
+            const tr = document.createElement("tr");
+            tr.draggable = true;
+            tr.addEventListener("dragstart", e => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData(INTERNAL_DND_TYPE,
+                    JSON.stringify({ path: entry.path, name: entry.name, directory: entry.directory }));
+                e.dataTransfer.setData("text/plain", entry.path);
+                tr.classList.add("dragging");
+            });
+            tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
+            // Folders are drop targets: drop a file/folder onto them to move it there.
+            if (entry.directory) {
+                makeMoveDropTarget(tr, entry.path);
+            }
+
+            const nameTd = document.createElement("td");
+            nameTd.className = "name";
+            const icon = document.createElement("span");
+            icon.className = "icon";
+            icon.textContent = entry.directory ? "📂" : fileIcon(entry.contentType);
+            const link = document.createElement("span");
+            link.className = "link";
+            link.textContent = entry.name;
+            link.onclick = () => entry.directory ? navigate(entry.path) : openPreview(entry);
+            nameTd.appendChild(icon); nameTd.appendChild(link);
+
+            const sizeTd = document.createElement("td");
+            sizeTd.className = "size";
+            sizeTd.textContent = entry.directory ? "—" : formatSize(entry.size);
+
+            const modTd = document.createElement("td");
+            modTd.className = "modified";
+            modTd.textContent = formatDate(entry.lastModified);
+
+            const actionsTd = document.createElement("td");
+            actionsTd.className = "actions";
+            if (!entry.directory) {
+                actionsTd.appendChild(iconButton("⬇", "Download", () => {
+                    window.location = API + "/download?path=" + encodeURIComponent(entry.path);
+                }));
+            }
+            actionsTd.appendChild(iconButton("✎", "Rename", () => renameEntry(entry)));
+            actionsTd.appendChild(iconButton("🗑", "Delete", () => deleteEntry(entry), true));
+
+            tr.appendChild(nameTd); tr.appendChild(sizeTd);
+            tr.appendChild(modTd); tr.appendChild(actionsTd);
+            tbody.appendChild(tr);
+        });
+    }
+    function fileIcon(contentType) {
+        if (!contentType) return "📄";
+        if (contentType.startsWith("image/")) return "🖼";
+        if (contentType === "application/pdf") return "📕";
+        if (contentType.startsWith("text/") || contentType === "application/json"
+            || contentType === "application/xml") return "📄";
+        return "📦";
+    }
+    function iconButton(label, title, onClick, danger) {
+        const b = document.createElement("button");
+        b.className = "icon-btn" + (danger ? " danger" : "");
+        b.textContent = label; b.title = title; b.onclick = onClick;
+        return b;
+    }
+    function navigate(path) {
+        currentPath = path || "/";
+        renderBreadcrumb();
+        load();
+    }
+
+    // ---- preview ----
+    async function openPreview(entry) {
+        const overlay = document.getElementById("previewOverlay");
+        const title = document.getElementById("previewTitle");
+        const body = document.getElementById("previewBody");
+        title.textContent = entry.name;
+        body.innerHTML = "";
+        const url = API + "/preview?path=" + encodeURIComponent(entry.path);
+        const ct = entry.contentType || "";
+        if (ct.startsWith("image/")) {
+            const img = document.createElement("img");
+            img.src = url; body.appendChild(img);
+            overlay.classList.add("open");
+        } else if (ct === "application/pdf") {
+            const frame = document.createElement("iframe");
+            frame.src = url;
+            frame.title = entry.name;
+            frame.style.cssText = "width:100%; height:75vh; border:0; background:#fff;";
+            body.appendChild(frame);
+            overlay.classList.add("open");
+        } else {
+            try {
+                const res = await api("GET", url);
+                const text = await res.text();
+                const pre = document.createElement("pre");
+                pre.textContent = text; body.appendChild(pre);
+                overlay.classList.add("open");
+            } catch (e) {
+                toast("No preview available for this file type.");
+            }
+        }
+    }
+    document.getElementById("previewClose").onclick =
+        () => document.getElementById("previewOverlay").classList.remove("open");
+
+    // ---- prompt modal (returns a Promise<string|null>) ----
+    function prompt(title, message, defaultValue) {
+        return new Promise(resolve => {
+            const overlay = document.getElementById("promptOverlay");
+            document.getElementById("promptTitle").textContent = title;
+            document.getElementById("promptMessage").textContent = message || "";
+            const input = document.getElementById("promptInput");
+            input.value = defaultValue || "";
+            const showInput = defaultValue !== undefined;
+            input.style.display = showInput ? "block" : "none";
+            overlay.classList.add("open");
+            if (showInput) input.focus();
+            const ok = document.getElementById("promptOk");
+            const cancel = document.getElementById("promptCancel");
+            function cleanup(result) {
+                overlay.classList.remove("open");
+                ok.onclick = null; cancel.onclick = null;
+                resolve(result);
+            }
+            ok.onclick = () => cleanup(input.value);
+            cancel.onclick = () => cleanup(null);
+        });
+    }
+
+    // ---- actions ----
+    async function newFolder() {
+        const name = await prompt("New folder", "Folder name:", "");
+        if (!name) return;
+        try {
+            await api("POST", API + "/folder?path=" + encodeURIComponent(joinPath(currentPath, name)));
+            load();
+        } catch (e) { toast("Create folder failed: " + e.message); }
+    }
+    async function renameEntry(entry) {
+        const name = await prompt("Rename", "New name:", entry.name);
+        if (!name || name === entry.name) return;
+        const to = joinPath(currentPath, name);
+        try {
+            await api("POST", API + "/rename", {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ from: entry.path, to })
+            });
+            load();
+        } catch (e) { toast("Rename failed: " + e.message); }
+    }
+    async function deleteEntry(entry) {
+        const ok = await prompt("Delete", "Delete \"" + entry.name + "\"? This cannot be undone.");
+        if (ok === null) return;
+        try {
+            await api("DELETE", API + "?path=" + encodeURIComponent(entry.path));
+            load();
+        } catch (e) { toast("Delete failed: " + e.message); }
+    }
+    async function uploadFiles(fileList) {
+        for (const file of fileList) {
+            const form = new FormData();
+            form.append("file", file);
+            try {
+                await api("POST", API + "/upload?path=" + encodeURIComponent(currentPath), { body: form });
+            } catch (e) { toast("Upload failed for " + file.name + ": " + e.message); }
+        }
+        load();
+    }
+
+    document.getElementById("newFolderBtn").onclick = newFolder;
+    document.getElementById("refreshBtn").onclick = load;
+    document.getElementById("uploadBtn").onclick = () => document.getElementById("fileInput").click();
+    document.getElementById("fileInput").onchange = (e) => {
+        if (e.target.files.length) uploadFiles(e.target.files);
+        e.target.value = "";
+    };
+
+    // ---- move (internal drag-and-drop between folders) ----
+    const INTERNAL_DND_TYPE = "application/x-sftp-entry";
+
+    // Turns an element into a drop target that moves a dragged file/folder into targetDir.
+    function makeMoveDropTarget(el, targetDir) {
+        el.addEventListener("dragover", e => {
+            if (!e.dataTransfer.types.includes(INTERNAL_DND_TYPE)) return; // ignore OS-file drags
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            el.classList.add("drop-target");
+        });
+        el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+        el.addEventListener("drop", e => {
+            if (!e.dataTransfer.types.includes(INTERNAL_DND_TYPE)) return;
+            e.preventDefault();
+            e.stopPropagation(); // don't let the panel treat this as an upload
+            el.classList.remove("drop-target");
+            let src;
+            try { src = JSON.parse(e.dataTransfer.getData(INTERNAL_DND_TYPE)); }
+            catch (err) { return; }
+            moveEntry(src, targetDir);
+        });
+    }
+
+    async function moveEntry(src, targetDir) {
+        const to = joinPath(targetDir, src.name);
+        if (to === src.path) return; // already in this folder — no-op
+        if (src.directory && (targetDir === src.path || targetDir.startsWith(src.path + "/"))) {
+            toast("Can't move a folder into itself.");
+            return;
+        }
+        try {
+            await api("POST", API + "/rename", {
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ from: src.path, to })
+            });
+            load();
+        } catch (e) { toast("Move failed: " + e.message); }
+    }
+
+    // ---- drag & drop upload (OS files → current folder) ----
+    const panel = document.getElementById("panel");
+    function isFileDrag(e) {
+        return e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    }
+    ["dragenter", "dragover"].forEach(ev => panel.addEventListener(ev, e => {
+        if (!isFileDrag(e)) return; // ignore internal move drags
+        e.preventDefault(); panel.classList.add("dragover");
+    }));
+    ["dragleave", "drop"].forEach(ev => panel.addEventListener(ev, e => {
+        if (!isFileDrag(e)) return;
+        e.preventDefault();
+        if (ev === "drop" || e.target === panel) panel.classList.remove("dragover");
+    }));
+    panel.addEventListener("drop", e => {
+        if (isFileDrag(e) && e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+    });
+
+    // ---- live refresh (poll while the tab is visible and no modal is open) ----
+    function startPolling() {
+        stopPolling();
+        pollTimer = setInterval(() => {
+            const modalOpen = document.querySelector(".overlay.open");
+            if (!modalOpen) load();
+        }, 4000);
+    }
+    function stopPolling() {
+        if (pollTimer !== null) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+    }
+    // Don't poll a background tab; refresh and resume when it becomes visible again.
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            stopPolling();
+        } else {
+            load();
+            startPolling();
+        }
+    });
+
+    // ---- boot ----
+    renderBreadcrumb();
+    load();
+    startPolling();
+</script>
+</body>
+</html>
