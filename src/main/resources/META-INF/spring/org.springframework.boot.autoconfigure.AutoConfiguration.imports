@@ -1,0 +1,2 @@
+io.github.pmoustopoulos.sftpconsole.SftpConsoleAutoConfiguration
+io.github.pmoustopoulos.sftpconsole.security.SftpConsoleSecurityConfiguration
