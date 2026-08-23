@@ -61,8 +61,9 @@ public class SftpConsoleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public SftpConsoleService sftpConsoleService(FileSystem sftpFileSystem) {
-        return new SftpConsoleService(sftpFileSystem);
+    public SftpConsoleService sftpConsoleService(
+            FileSystem sftpFileSystem, SftpConsoleProperties properties) {
+        return new SftpConsoleService(sftpFileSystem, properties.getMaxPreviewSize().toBytes());
     }
 
     @Bean

@@ -99,6 +99,13 @@ class SftpConsoleControllerTest {
     }
 
     @Test
+    void previewOfTextReturns200() throws Exception {
+        mockMvc.perform(get("/sftp-console/api/files/preview").param("path", "/hello.txt"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN));
+    }
+
+    @Test
     void previewOfBinaryReturns415() throws Exception {
 
         service.upload("/", "blob.bin", new byte[]{1, 2, 3});

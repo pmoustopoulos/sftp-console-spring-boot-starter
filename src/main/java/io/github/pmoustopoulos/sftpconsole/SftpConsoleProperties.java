@@ -1,6 +1,9 @@
 package io.github.pmoustopoulos.sftpconsole;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.unit.DataSize;
+
+import java.time.Duration;
 
 @ConfigurationProperties(prefix = "sftp.console")
 public class SftpConsoleProperties {
@@ -28,6 +31,21 @@ public class SftpConsoleProperties {
 
     /** Base URL path where the console UI and its API are served. */
     private String path = "/sftp-console";
+
+    /**
+     * Maximum size of a file that can be uploaded through the console
+     */
+    private String maxUploadSize = "10MB";
+
+    /**
+     * Maximum size of a file whose text content is shown inline in the preview
+     */
+    private DataSize maxPreviewSize = DataSize.ofMegabytes(1);
+
+    /**
+     * How often the console UI auto-refreshes the current folder
+     */
+    private Duration refreshInterval = Duration.ofSeconds(4);
 
     public boolean isEnabled() {
         return enabled;
@@ -83,5 +101,29 @@ public class SftpConsoleProperties {
 
     public void setPath(String path) {
         this.path = path;
+    }
+
+    public String getMaxUploadSize() {
+        return maxUploadSize;
+    }
+
+    public void setMaxUploadSize(String maxUploadSize) {
+        this.maxUploadSize = maxUploadSize;
+    }
+
+    public DataSize getMaxPreviewSize() {
+        return maxPreviewSize;
+    }
+
+    public void setMaxPreviewSize(DataSize maxPreviewSize) {
+        this.maxPreviewSize = maxPreviewSize;
+    }
+
+    public Duration getRefreshInterval() {
+        return refreshInterval;
+    }
+
+    public void setRefreshInterval(Duration refreshInterval) {
+        this.refreshInterval = refreshInterval;
     }
 }

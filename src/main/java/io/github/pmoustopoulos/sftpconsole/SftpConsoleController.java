@@ -56,7 +56,8 @@ public class SftpConsoleController {
 
         String basePath = contextPath + properties.getPath();
 
-        return template.replace("__BASE_PATH__", basePath);
+        return template.replace("__BASE_PATH__", basePath)
+                .replace("__REFRESH_MS__", String.valueOf(properties.getRefreshInterval().toMillis()));
     }
 
     @GetMapping("/api/files")

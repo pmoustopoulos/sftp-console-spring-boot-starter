@@ -6,9 +6,17 @@ import io.github.pmoustopoulos.sftpconsole.dto.PreviewContent;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.*;
+import java.nio.file.FileSystem;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -18,7 +26,7 @@ import java.util.stream.Stream;
  */
 public class SftpConsoleService {
 
-    private static final long TEXT_PREVIEW_MAX = 1_000_000L;
+    private static final long DEFAULT_PREVIEW_MAX = 1_000_000L;
 
     private static final Map<String, String> CONTENT_TYPES = Map.ofEntries(
             Map.entry("txt", "text/plain"),
@@ -41,164 +49,137 @@ public class SftpConsoleService {
             Map.entry("bmp", "image/bmp"),
             Map.entry("svg", "image/svg+xml"),
             Map.entry("webp", "image/webp"),
-            Map.entry("pdf", "application/pdf"));
+            Map.entry("pdf", "application/pdf"),
+            Map.entry("zip", "application/zip"),
+            Map.entry("xls", "application/vnd.ms-excel"),
+            Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            Map.entry("doc", "application/msword"),
+            Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
 
     private final FileSystem fileSystem;
     private final Path root;
+    private final long maxPreviewBytes;
 
     public SftpConsoleService(FileSystem fileSystem) {
+        this(fileSystem, DEFAULT_PREVIEW_MAX);
+    }
+
+    public SftpConsoleService(FileSystem fileSystem, long maxPreviewBytes) {
         this.fileSystem = fileSystem;
         this.root = fileSystem.getPath("/").toAbsolutePath().normalize();
+        this.maxPreviewBytes = maxPreviewBytes > 0 ? maxPreviewBytes : DEFAULT_PREVIEW_MAX;
     }
 
     public List<FileEntry> list(String path) {
 
         Path dir = resolve(path);
-
         if (!Files.exists(dir)) {
             throw new NotFoundException("No such directory: " + path);
         }
-
         if (!Files.isDirectory(dir)) {
             throw new IllegalArgumentException("Not a directory: " + path);
         }
-
         try (Stream<Path> entries = Files.list(dir)) {
             return entries.sorted(directoriesFirst()).map(this::toEntry).toList();
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     public FileContent download(String path) {
-
         Path file = requireFile(resolve(path), path);
-
         try {
             byte[] data = Files.readAllBytes(file);
             String name = file.getFileName().toString();
-
             return new FileContent(data, contentType(name), name);
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     public PreviewContent preview(String path) {
-
         Path file = requireFile(resolve(path), path);
         String ct = contentType(file.getFileName().toString());
         boolean previewable = isText(ct) || isImage(ct) || isPdf(ct);
-
         if (!previewable) {
             return new PreviewContent(false, new byte[0], ct);
         }
-
         try {
-
             byte[] data = Files.readAllBytes(file);
-
-            if (isText(ct) && data.length > TEXT_PREVIEW_MAX) {
-                data = Arrays.copyOf(data, (int) TEXT_PREVIEW_MAX);
+            if (isText(ct) && data.length > maxPreviewBytes) {
+                data = Arrays.copyOf(data, (int) maxPreviewBytes);
             }
-
             return new PreviewContent(true, data, ct);
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     public void upload(String dirPath, String filename, byte[] data) {
-
         if (filename == null || filename.isBlank()
                 || filename.contains("/") || filename.contains("\\")
                 || filename.equals(".") || filename.equals("..")) {
-
             throw new IllegalArgumentException("Invalid filename: " + filename);
         }
-
         Path dir = resolve(dirPath);
         Path target = dir.resolve(filename).normalize();
-
         if (!target.startsWith(root)) {
             throw new IllegalArgumentException("Path escapes root: " + filename);
         }
-
         try {
-
             Files.createDirectories(dir);
-            Files.write(target, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-
+            Files.write(target, data,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     public void createFolder(String path) {
-
         Path dir = resolve(path);
-
         if (dir.equals(root)) {
             throw new IllegalArgumentException("Cannot create the root directory");
         }
-
         try {
             Files.createDirectories(dir);
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     public void rename(String from, String to) {
-
         Path src = resolve(from);
         Path dst = resolve(to);
-
         if (!Files.exists(src)) {
             throw new NotFoundException("No such path: " + from);
         }
-
         if (dst.equals(root)) {
             throw new IllegalArgumentException("Cannot overwrite the root directory");
         }
-
         try {
             Path parent = dst.getParent();
-
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-
             Files.move(src, dst, StandardCopyOption.REPLACE_EXISTING);
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
     }
 
     public void delete(String path) {
-
         Path target = resolve(path);
-
         if (target.equals(root)) {
             throw new IllegalArgumentException("Cannot delete the root directory");
         }
-
         if (!Files.exists(target)) {
             throw new NotFoundException("No such path: " + path);
         }
-
         try {
-
             if (Files.isDirectory(target)) {
-
                 try (Stream<Path> walk = Files.walk(target)) {
                     walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-
                         try {
                             Files.delete(p);
                         } catch (IOException e) {
@@ -209,7 +190,6 @@ public class SftpConsoleService {
             } else {
                 Files.delete(target);
             }
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -218,9 +198,7 @@ public class SftpConsoleService {
     // ---- helpers ----
 
     private Path resolve(String userPath) {
-
         String p = (userPath == null || userPath.isBlank()) ? "/" : userPath.trim();
-
         for (String segment : p.split("/")) {
             if (segment.equals("..")) {
                 // Jimfs's Path.normalize() silently collapses a leading ".." at the
@@ -229,42 +207,32 @@ public class SftpConsoleService {
                 throw new IllegalArgumentException("Path escapes root: " + userPath);
             }
         }
-
         if (p.startsWith("/")) {
             p = p.substring(1);
         }
-
         Path resolved = root.resolve(p).normalize();
-
         if (!resolved.startsWith(root)) {
             throw new IllegalArgumentException("Path escapes root: " + userPath);
         }
-
         return resolved;
     }
 
     private Path requireFile(Path p, String original) {
-
         if (!Files.exists(p)) {
             throw new NotFoundException("No such file: " + original);
         }
-
         if (Files.isDirectory(p)) {
             throw new IllegalArgumentException("Not a file: " + original);
         }
-
         return p;
     }
 
     private FileEntry toEntry(Path p) {
-
         try {
-
             BasicFileAttributes attrs = Files.readAttributes(p, BasicFileAttributes.class);
             boolean dir = attrs.isDirectory();
             String name = p.getFileName().toString();
             String rel = "/" + root.relativize(p).toString().replace(fileSystem.getSeparator(), "/");
-
             return new FileEntry(
                     name,
                     rel,
@@ -272,7 +240,6 @@ public class SftpConsoleService {
                     dir ? 0L : attrs.size(),
                     attrs.lastModifiedTime().toInstant().toString(),
                     dir ? null : contentType(name));
-
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -284,14 +251,10 @@ public class SftpConsoleService {
     }
 
     private String contentType(String filename) {
-
         int dot = filename.lastIndexOf('.');
-
         if (dot >= 0 && dot < filename.length() - 1) {
-
             String ext = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
             String ct = CONTENT_TYPES.get(ext);
-
             if (ct != null) {
                 return ct;
             }

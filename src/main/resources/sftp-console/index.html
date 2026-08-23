@@ -366,10 +366,19 @@
                 const text = await res.text();
                 const pre = document.createElement("pre");
                 pre.textContent = text; body.appendChild(pre);
-                overlay.classList.add("open");
             } catch (e) {
-                toast("No preview available for this file type.");
+                // Binary/office files (e.g. .xlsx, .docx, .zip) can't be shown inline in a
+                // browser — offer a download instead of failing silently.
+                const msg = document.createElement("div");
+                msg.className = "muted";
+                msg.textContent = "Preview isn't available for this file type.";
+                const dl = document.createElement("button");
+                dl.className = "btn"; dl.textContent = "⬇ Download";
+                dl.style.marginTop = "14px";
+                dl.onclick = () => { window.location = API + "/download?path=" + encodeURIComponent(entry.path); };
+                body.appendChild(msg); body.appendChild(dl);
             }
+            overlay.classList.add("open");
         }
     }
     document.getElementById("previewClose").onclick =
@@ -506,12 +515,14 @@
     });
 
     // ---- live refresh (poll while the tab is visible and no modal is open) ----
+    const REFRESH_MS = __REFRESH_MS__;   // 0 disables auto-refresh
     function startPolling() {
         stopPolling();
+        if (REFRESH_MS <= 0) return;
         pollTimer = setInterval(() => {
             const modalOpen = document.querySelector(".overlay.open");
             if (!modalOpen) load();
-        }, 4000);
+        }, REFRESH_MS);
     }
     function stopPolling() {
         if (pollTimer !== null) {
@@ -521,6 +532,7 @@
     }
     // Don't poll a background tab; refresh and resume when it becomes visible again.
     document.addEventListener("visibilitychange", () => {
+        if (REFRESH_MS <= 0) return;
         if (document.hidden) {
             stopPolling();
         } else {

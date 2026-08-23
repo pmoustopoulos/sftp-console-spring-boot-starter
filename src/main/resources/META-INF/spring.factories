@@ -1,0 +1,4 @@
+# EnvironmentPostProcessor: runs early (environment prep, before the context) to set overridable
+# defaults such as the multipart upload limit while the console is enabled.
+org.springframework.boot.EnvironmentPostProcessor=\
+io.github.pmoustopoulos.sftpconsole.SftpConsoleEnvironmentPostProcessor

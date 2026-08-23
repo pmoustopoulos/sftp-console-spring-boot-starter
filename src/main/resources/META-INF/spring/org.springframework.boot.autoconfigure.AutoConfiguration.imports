@@ -1,2 +1,3 @@
+# Auto-configuration classes, applied during application-context refresh (after @ConditionalOn checks).
 io.github.pmoustopoulos.sftpconsole.SftpConsoleAutoConfiguration
 io.github.pmoustopoulos.sftpconsole.security.SftpConsoleSecurityConfiguration
