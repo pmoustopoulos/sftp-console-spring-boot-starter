@@ -7,6 +7,8 @@ import org.springframework.boot.web.server.context.WebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.env.Environment;
 
+import java.nio.file.Paths;
+
 /**
  * Logs the console URL and the SFTP endpoint (with credentials) once the web server is up,
  * so they're easy to spot in the startup output.
@@ -35,10 +37,15 @@ public class SftpConsoleStartupLogger implements ApplicationListener<WebServerIn
                 ? "any username / any password"
                 : properties.getUsername() + " / " + properties.getPassword();
 
+        String storage = properties.getStorage() == SftpConsoleProperties.Storage.FILE
+                ? "file: " + Paths.get(properties.getDirectory()).toAbsolutePath().normalize()
+                : "in-memory (cleared on restart)";
+
         log.info("");
         log.info("----------------------------------------------------------------");
         log.info("  SFTP console:        {}", consoleUrl);
-        log.info("  In-memory SFTP:      {}:{}  ({})", properties.getHost(), sshServer.getPort(), credentials);
+        log.info("  SFTP endpoint:       {}:{}  ({})", properties.getHost(), sshServer.getPort(), credentials);
+        log.info("  Storage:             {}", storage);
         log.info("----------------------------------------------------------------");
         log.info("");
     }

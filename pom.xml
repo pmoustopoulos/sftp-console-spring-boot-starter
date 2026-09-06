@@ -11,7 +11,7 @@
 
     <groupId>io.github.pmoustopoulos</groupId>
     <artifactId>sftp-console-spring-boot-starter</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <name>sftp-console-spring-boot-starter</name>
     <description>In-memory SFTP server (Apache MINA SSHD + Jimfs) with a web console, as a Spring Boot starter</description>
     <url>https://github.com/pmoustopoulos/sftp-console-spring-boot-starter</url>

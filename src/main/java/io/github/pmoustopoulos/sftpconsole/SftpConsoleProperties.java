@@ -8,8 +8,28 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "sftp.console")
 public class SftpConsoleProperties {
 
-    /** Whether the in-memory SFTP server and console are active. Off by default. */
+    /** Where the served files live. */
+    public enum Storage {
+        /** Google Jimfs in the JVM heap — fast, isolated, and cleared on restart (default). */
+        MEMORY,
+        /** A real directory on disk (see {@link #directory}) — files survive restarts. */
+        FILE
+    }
+
+    /** Whether the embedded SFTP server and console are active. Off by default. */
     private boolean enabled = false;
+
+    /**
+     * Backing store for the served files: {@code memory} (in-heap, cleared on restart) or
+     * {@code file} (a directory on disk that persists across restarts — like H2's file mode).
+     */
+    private Storage storage = Storage.MEMORY;
+
+    /**
+     * Directory used when {@link #storage} is {@code file}. Created if missing; it becomes the SFTP
+     * root ("/"), sandboxed so clients cannot escape it. Ignored for {@code memory} storage.
+     */
+    private String directory = "sftp-data";
 
     /** Port the embedded SFTP server listens on. */
     private int port = 2222;
@@ -53,6 +73,22 @@ public class SftpConsoleProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public Storage getStorage() {
+        return storage;
+    }
+
+    public void setStorage(Storage storage) {
+        this.storage = storage;
+    }
+
+    public String getDirectory() {
+        return directory;
+    }
+
+    public void setDirectory(String directory) {
+        this.directory = directory;
     }
 
     public int getPort() {
