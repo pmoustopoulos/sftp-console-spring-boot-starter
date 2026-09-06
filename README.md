@@ -27,7 +27,8 @@ machine. That's what this starter is.
 - Live refresh — files your app pushes over SFTP appear automatically
 - Light/dark theme toggle, remembered across visits
 - Off by default; enabled with a single property
-- Files live in the JVM heap (Jimfs) and are cleared on restart
+- Two storage modes: **in-memory** (Jimfs heap, cleared on restart — the default) or **file** (a real
+  directory on disk that persists across restarts, like H2's file mode)
 - No Docker and no external process
 
 ## Screenshots
@@ -102,7 +103,8 @@ sftp:
 ```
 ----------------------------------------------------------------
   SFTP console:        http://localhost:8080/sftp-console
-  In-memory SFTP:      localhost:2222  (user / password)
+  SFTP endpoint:       localhost:2222  (user / password)
+  Storage:             in-memory (cleared on restart)
 ----------------------------------------------------------------
 ```
 
@@ -119,10 +121,29 @@ FileZilla) connects over SFTP to `localhost:2222` with the configured credential
 | `sftp.console.username` | `user` | SFTP username clients authenticate with. |
 | `sftp.console.password` | `password` | SFTP password clients authenticate with. |
 | `sftp.console.accept-any-credentials` | `false` | When `true`, accept any username/password. |
+| `sftp.console.storage` | `memory` | Where served files live: `memory` (Jimfs in the JVM heap, cleared on restart) or `file` (a directory on disk that persists across restarts, like H2's file mode). |
+| `sftp.console.directory` | `sftp-data` | Directory used when `storage=file`. Created if missing; it becomes the SFTP root (`/`), sandboxed so clients can't escape it. Ignored for `memory`. |
 | `sftp.console.path` | `/sftp-console` | Base path the console UI and its REST API are served under. |
 | `sftp.console.max-upload-size` | `10MB` | Max size of a file uploaded through the console (e.g. `50MB`). Raises Spring's multipart limit while the console is enabled; override here, or with the standard `spring.servlet.multipart.*` settings. |
 | `sftp.console.max-preview-size` | `1MB` | Max size of text shown inline in the preview; larger text files are truncated. Images and PDFs preview in full. |
 | `sftp.console.refresh-interval` | `4s` | How often the console UI auto-refreshes the current folder. Set to `0s` to disable auto-refresh. |
+
+### Storage: in-memory vs. file
+
+By default the served files live in the JVM heap (Jimfs) and are cleared on restart — great for tests
+and quick demos. To keep files across restarts (like H2's file mode), switch to `file` storage and
+point it at a directory:
+
+```yaml
+sftp:
+  console:
+    enabled: true
+    storage: file          # memory (default) | file
+    directory: ./sftp-data # the on-disk SFTP root when storage=file
+```
+
+The directory is created if missing and becomes the SFTP root (`/`), sandboxed so clients can't
+escape it. Still development-only.
 
 ## ⚠️ Development only
 
