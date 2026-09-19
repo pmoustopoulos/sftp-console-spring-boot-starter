@@ -39,7 +39,11 @@ public class SftpConsoleSecurityConfiguration {
 
         http.securityMatcher(pattern)
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .csrf(csrf -> csrf.disable());
+                .csrf(csrf -> csrf.disable())
+                // The console previews PDFs in a same-origin <iframe>. Spring Security's default
+                // X-Frame-Options: DENY blocks all framing (even same-origin), leaving the PDF
+                // preview blank. Relax to SAMEORIGIN, scoped to the console path only.
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
 
         return http.build();
     }
