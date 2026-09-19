@@ -71,7 +71,7 @@ cd sftp-console-spring-boot-starter
 mvn clean install
 ```
 
-Re-run `mvn clean install` whenever you change the starter's code. (Requires Java 17 or later.)
+Re-run `mvn clean install` whenever you change the starter's code. (Requires Java 21 or later.)
 
 ## Usage
 
@@ -81,7 +81,7 @@ Re-run `mvn clean install` whenever you change the starter's code. (Requires Jav
 <dependency>
   <groupId>io.github.pmoustopoulos</groupId>
   <artifactId>sftp-console-spring-boot-starter</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 ```
 
