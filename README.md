@@ -36,7 +36,6 @@ machine. That's what this starter is.
 Note: I have added the dependency on another project just to show you the UI of the SFTP console.
 ![SFTP console demo](images/sftp-console-ui.png)
 
-
 ## Why not Testcontainers / a Docker SFTP image?
 
 Testcontainers with an SFTP image is the usual way to get an SFTP endpoint in tests. This
