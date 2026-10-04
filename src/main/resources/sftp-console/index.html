@@ -3,547 +3,1234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>SFTP Console</title>
+    <script>
+        // Apply a saved theme before first paint (no flash). Default: follow the OS.
+        (function () {
+            try {
+                var t = localStorage.getItem('sftp-console-theme');
+                if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {}
+        })();
+    </script>
     <style>
+        /* ---------- Tokens ----------
+           Cool slate neutrals with one cobalt accent; folders are amber so they scan apart from
+           files. The top bar is always the deep ink band; everything else switches with the theme. */
         :root {
-            --accent: #2563eb;
-            --accent-dark: #1d4ed8;
-            --bg: #f1f5f9;
-            --panel: #ffffff;
-            --border: #e2e8f0;
-            --text: #0f172a;
-            --muted: #64748b;
-            --hover: #f8fafc;
-            --row-hover: #eff6ff;
-            --danger: #dc2626;
-            --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+            color-scheme: light;
+            --ground: #f3f5f8;
+            --surface: #ffffff;
+            --raised: #ffffff;
+            --sunken: #f6f7fa;
+            --line: #dfe3ea;
+            --line-strong: #c5ccd8;
+            --ink: #141a26;
+            --ink-2: #454f60;
+            --ink-3: #5b6577;
+            --accent: #2f5bd3;
+            --accent-ink: #ffffff;
+            --accent-hover: #2549b0;
+            --accent-soft: #e7edfc;
+            --accent-soft-ink: #1f3f9c;
+            --folder: #b7791f;
+            --hover: #eef1f5;
+            --danger: #b42318;
+            --danger-soft: #fdeceb;
+            --ok: #12704f;
+            --skeleton: #e4e8ee;
+            --bar: #121826;
+            --bar-ink: #e8ecf4;
+            --bar-ink-2: #a3adc0;
+            --bar-line: rgba(232, 236, 244, .14);
+            --bar-hover: rgba(232, 236, 244, .09);
+            --live: #4ade80;
+            --shadow: 0 1px 2px rgba(18, 24, 38, .06), 0 2px 8px rgba(18, 24, 38, .05);
+            --shadow-lg: 0 12px 40px rgba(18, 24, 38, .22);
         }
-        html[data-theme="dark"] {
-            --accent: #3b82f6;
-            --accent-dark: #2563eb;
-            --bg: #0f172a;
-            --panel: #1e293b;
-            --border: #334155;
-            --text: #e2e8f0;
-            --muted: #94a3b8;
-            --hover: #263449;
-            --row-hover: #1e3a5f;
-            --danger: #ef4444;
-            --shadow: 0 1px 3px rgba(0,0,0,.4);
+        :root[data-theme="dark"] {
+            color-scheme: dark;
+            --ground: #0e1118;
+            --surface: #141822;
+            --raised: #1a1f2b;
+            --sunken: #10131b;
+            --line: #252b38;
+            --line-strong: #343c4d;
+            --ink: #e6e9f0;
+            --ink-2: #b2b9c7;
+            --ink-3: #8e97a8;
+            --accent: #7ea2ff;
+            --accent-ink: #0b1020;
+            --accent-hover: #a3bdff;
+            --accent-soft: #1b2647;
+            --accent-soft-ink: #b5c8ff;
+            --folder: #e3b341;
+            --hover: #1c2230;
+            --danger: #ff8f80;
+            --danger-soft: #3a1e1b;
+            --ok: #5fd4a0;
+            --skeleton: #1f2532;
+            --bar: #0a0d13;
+            --bar-line: rgba(232, 236, 244, .12);
+            --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .25);
+            --shadow-lg: 0 12px 40px rgba(0, 0, 0, .55);
         }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                color-scheme: dark;
+                --ground: #0e1118;
+                --surface: #141822;
+                --raised: #1a1f2b;
+                --sunken: #10131b;
+                --line: #252b38;
+                --line-strong: #343c4d;
+                --ink: #e6e9f0;
+                --ink-2: #b2b9c7;
+                --ink-3: #8e97a8;
+                --accent: #7ea2ff;
+                --accent-ink: #0b1020;
+                --accent-hover: #a3bdff;
+                --accent-soft: #1b2647;
+                --accent-soft-ink: #b5c8ff;
+                --folder: #e3b341;
+                --hover: #1c2230;
+                --danger: #ff8f80;
+                --danger-soft: #3a1e1b;
+                --ok: #5fd4a0;
+                --skeleton: #1f2532;
+                --bar: #0a0d13;
+                --bar-line: rgba(232, 236, 244, .12);
+                --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 8px rgba(0, 0, 0, .25);
+                --shadow-lg: 0 12px 40px rgba(0, 0, 0, .55);
+            }
+        }
+
+        /* ---------- Base ---------- */
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: var(--text); background: var(--bg);
-            display: flex; flex-direction: column;
+            font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: var(--ink); background: var(--ground);
+            display: grid; grid-template-rows: 48px auto minmax(0, 1fr) auto;
+            height: 100vh; height: 100dvh;
+            -webkit-font-smoothing: antialiased;
+            scrollbar-color: var(--line-strong) transparent;
         }
-        header {
-            display: flex; align-items: center; gap: 16px;
-            padding: 0 20px; height: 60px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-            color: #fff; box-shadow: var(--shadow); flex-shrink: 0;
+        ::selection { background: var(--accent-soft); color: var(--accent-soft-ink); }
+        button, input { font: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+        .mono { font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace; }
+        .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.6;
+                stroke-linecap: round; stroke-linejoin: round; }
+        kbd {
+            font: 11px/1 ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+            display: inline-block; min-width: 20px; padding: 3px 5px; text-align: center;
+            border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px;
+            background: var(--raised); color: var(--ink-2);
         }
-        header .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
-        header .brand .logo { font-size: 22px; }
-        header .spacer { flex: 1; }
+
+        /* ---------- Top bar ---------- */
+        .bar { display: flex; align-items: center; gap: 14px; padding: 0 12px 0 16px; background: var(--bar); color: var(--bar-ink); }
+        .bar :focus-visible { outline-color: var(--live); }
+        .brand { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+        .brand .light { color: var(--bar-ink-2); font-weight: 500; }
+        .mark { width: 24px; height: 24px; display: block; overflow: visible; }
+        .mark .shape { fill: none; stroke: var(--bar-ink); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+        .mark .cut { fill: var(--bar); }
+        .mark .dot { fill: var(--bar-ink-2); transition: fill .2s; }
+        .live .mark .dot { fill: var(--live); }
+        .offline .mark .dot { fill: #f0b429; }
+        .sep { width: 1px; height: 20px; background: var(--bar-line); }
+        .conn-chip {
+            display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 10px; border-radius: 6px;
+            border: 1px solid var(--bar-line); background: transparent; color: var(--bar-ink-2); cursor: pointer;
+            font: 12px/1 ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace; white-space: nowrap;
+            transition: background .15s, color .15s;
+        }
+        .conn-chip:hover { background: var(--bar-hover); color: var(--bar-ink); }
+        .conn-chip .i { width: 14px; height: 14px; }
+        .conn-chip .copied { color: var(--live); font-family: system-ui, sans-serif; font-weight: 600; }
+        .status { font-size: 12px; color: #f0b429; white-space: nowrap; }
+        .status[hidden] { display: none; }
+        .spacer { flex: 1; }
+        .bar-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            height: 30px; width: 30px; border-radius: 6px; cursor: pointer;
+            border: 1px solid var(--bar-line); background: transparent; color: var(--bar-ink);
+            transition: background .15s;
+        }
+        .bar-btn:hover { background: var(--bar-hover); }
+        .theme-sun { display: none; }
+        :root[data-theme="dark"] .theme-sun { display: block; }
+        :root[data-theme="dark"] .theme-moon { display: none; }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) .theme-sun { display: block; }
+            :root:not([data-theme="light"]) .theme-moon { display: none; }
+        }
+
+        /* ---------- Toolbar ---------- */
+        .toolbar {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--line);
+        }
+        .crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1; overflow: hidden; }
+        .crumb {
+            display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 6px;
+            border: 1px solid transparent; background: none; cursor: pointer; color: var(--ink-2); font-weight: 550;
+            white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+        }
+        .crumb:hover { background: var(--hover); color: var(--ink); }
+        .crumb[aria-current="page"] { color: var(--ink); font-weight: 650; cursor: default; }
+        .crumb[aria-current="page"]:hover { background: none; }
+        .crumb.drop-target { border-color: var(--accent); border-style: dashed; background: var(--accent-soft); color: var(--accent-soft-ink); }
+        .crumb-sep { color: var(--line-strong); flex-shrink: 0; }
+        .crumb-sep .i { width: 14px; height: 14px; }
+        .search {
+            display: flex; align-items: center; gap: 6px; height: 30px; width: 220px; padding: 0 6px 0 9px;
+            border: 1px solid var(--line-strong); border-radius: 6px; background: var(--raised); color: var(--ink-3);
+        }
+        .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font-size: 12.5px; }
+        .search input::placeholder { color: var(--ink-3); }
+        .search kbd { padding: 2px 5px; min-width: 0; }
         .btn {
-            cursor: pointer; border: none; border-radius: 8px;
-            padding: 8px 14px; font-size: 13px; font-weight: 600;
-            background: rgba(255,255,255,.16); color: #fff; transition: background .15s;
+            display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 6px;
+            border: 1px solid var(--line-strong); background: var(--raised); color: var(--ink);
+            font-size: 12.5px; font-weight: 550; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+            transition: background .15s, border-color .15s, color .15s;
         }
-        .btn:hover { background: rgba(255,255,255,.3); }
-        .btn.danger:hover { background: var(--danger); }
-        .theme-toggle {
-            cursor: pointer; border: none; background: rgba(255,255,255,.16);
-            color: #fff; border-radius: 8px; width: 38px; height: 38px; font-size: 16px;
+        .btn:hover { background: var(--hover); }
+        .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+        .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .btn.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+        :root[data-theme="dark"] .btn.danger-solid { color: #2a0f0b; }
+        @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.danger-solid { color: #2a0f0b; } }
+        .btn.danger-solid:hover { filter: brightness(1.08); }
+        .btn.icon { width: 30px; padding: 0; justify-content: center; }
+
+        /* ---------- File table ---------- */
+        .pane { position: relative; overflow: auto; min-height: 0; background: var(--surface); }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        col.c-size { width: 110px; }
+        col.c-mod { width: 170px; }
+        col.c-act { width: 152px; }
+        th {
+            position: sticky; top: 0; z-index: 1; height: 34px; padding: 0 16px; text-align: left;
+            background: var(--sunken); border-bottom: 1px solid var(--line);
+            font-size: 11.5px; font-weight: 600; color: var(--ink-3); letter-spacing: .02em;
         }
-        main { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 16px; overflow: hidden; }
-        .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .toolbar .btn { background: var(--accent); }
-        .toolbar .btn:hover { background: var(--accent-dark); }
-        .toolbar .btn.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
-        .toolbar .btn.secondary:hover { background: var(--hover); }
-        .breadcrumb {
-            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-            font-size: 14px; color: var(--muted);
+        th.num, td.num { text-align: right; }
+        th .sort {
+            display: inline-flex; align-items: center; gap: 4px; margin: 0 -6px; padding: 3px 6px; border-radius: 5px;
+            border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer;
         }
-        .breadcrumb a { color: var(--accent); cursor: pointer; text-decoration: none; }
-        .breadcrumb a:hover { text-decoration: underline; }
-        .breadcrumb .sep { color: var(--muted); }
-        .panel {
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 12px; box-shadow: var(--shadow); flex: 1;
-            overflow: auto; position: relative;
-        }
-        .panel.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; }
+        th .sort:hover { color: var(--ink); background: var(--hover); }
+        th .sort .i { width: 12px; height: 12px; opacity: 0; }
+        th[aria-sort] .sort { color: var(--ink); }
+        th[aria-sort] .sort .i { opacity: 1; }
+        th[aria-sort="descending"] .sort .i { transform: rotate(180deg); }
+        td { height: 40px; padding: 0 16px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        tbody tr { transition: background .1s; }
+        tbody tr:hover, tbody tr:focus-within { background: var(--hover); }
         tbody tr.dragging { opacity: .45; }
-        tbody tr.drop-target, .breadcrumb a.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--row-hover); }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 11px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
-        th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); z-index: 1; }
-        tbody tr:hover { background: var(--row-hover); }
-        td.name { display: flex; align-items: center; gap: 10px; }
-        td.name .icon { font-size: 18px; }
-        td.name .link { cursor: pointer; color: var(--text); font-weight: 500; }
-        td.name .link:hover { color: var(--accent); }
-        td.size, td.modified { color: var(--muted); white-space: nowrap; }
-        td.actions { text-align: right; white-space: nowrap; }
-        .icon-btn {
-            cursor: pointer; border: none; background: transparent; color: var(--muted);
-            font-size: 15px; padding: 5px 7px; border-radius: 6px;
+        tbody tr.drop-target td { background: var(--accent-soft); box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+        tbody tr.flash td { animation: flash 1.6s ease-out; }
+        @keyframes flash { 0% { background: var(--accent-soft); } 100% { background: transparent; } }
+        .name {
+            display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; margin: 0; padding: 0;
+            border: 0; background: none; cursor: pointer; text-align: left; color: var(--ink); font-size: 13px;
         }
-        .icon-btn:hover { background: var(--hover); color: var(--text); }
-        .icon-btn.danger:hover { color: var(--danger); }
-        .empty { padding: 40px; text-align: center; color: var(--muted); }
-        .overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,.5);
-            display: none; align-items: center; justify-content: center; z-index: 10; padding: 20px;
+        .name:focus-visible { outline-offset: -2px; }
+        .name .i { width: 18px; height: 18px; color: var(--ink-3); }
+        .name.dir .i { color: var(--folder); }
+        .name .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+        .name.dir .label { font-weight: 600; }
+        .name:hover .label { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+        .ext { flex-shrink: 0; padding: 1px 6px; border-radius: 4px; background: var(--hover); color: var(--ink-3);
+               font: 10.5px/1.5 ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace; text-transform: uppercase; }
+        td.meta { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+        td.acts { text-align: right; padding-right: 10px; text-overflow: clip; }
+        .act {
+            display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+            border: 1px solid transparent; border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer;
+            opacity: 0; transition: opacity .1s, background .12s, color .12s;
         }
-        .overlay.open { display: flex; }
-        .modal {
-            background: var(--panel); color: var(--text); border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,.3); max-width: 900px; width: 100%;
-            max-height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+        tbody tr:hover .act, tbody tr:focus-within .act, .act:focus-visible { opacity: 1; }
+        .act:hover { background: var(--raised); border-color: var(--line); color: var(--ink); }
+        .act.danger:hover { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+        @media (hover: none) { .act { opacity: 1; } }
+        .skeleton td span { display: block; height: 10px; border-radius: 4px; background: var(--skeleton); }
+
+        /* ---------- Empty / drop ---------- */
+        .empty {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+            padding: 64px 24px; gap: 6px; color: var(--ink-2);
         }
-        .modal header { background: var(--panel); color: var(--text); border-bottom: 1px solid var(--border); height: auto; padding: 16px 20px; }
-        .modal .body { padding: 20px; overflow: auto; }
-        .modal .body pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
-        .modal .body img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        .modal .close { margin-left: auto; }
-        /* The base .btn is white-on-transparent, styled for the coloured top bar. Inside a modal
-           (light/dark panel background) it has no contrast, so give modal buttons readable styles. */
-        .modal .btn { background: var(--accent); color: #fff; }
-        .modal .btn:hover { background: var(--accent-dark); }
-        .modal .btn.secondary, .modal .btn.close { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
-        .modal .btn.secondary:hover, .modal .btn.close:hover { background: var(--hover); }
-        .prompt-input {
-            width: 100%; padding: 9px 12px; font-size: 14px; margin-top: 12px;
-            border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text);
+        .empty .art { width: 64px; height: 64px; margin-bottom: 10px; color: var(--line-strong); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+        .empty .art .hi { stroke: var(--accent); }
+        .empty h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
+        .empty p { margin: 0; max-width: 46ch; font-size: 12.5px; color: var(--ink-3); }
+        .empty code { font: 11.5px ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace; color: var(--ink-2); background: var(--hover); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+        .empty .btn { margin-top: 14px; }
+        .dropzone {
+            position: absolute; inset: 10px; z-index: 3; display: none; align-items: center; justify-content: center;
+            border: 2px dashed var(--accent); border-radius: 10px; pointer-events: none;
+            background: color-mix(in srgb, var(--surface) 86%, transparent);
+            font-size: 14px; font-weight: 600; color: var(--accent-soft-ink);
         }
-        .prompt-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+        .pane.dragover .dropzone { display: flex; }
+        .dropzone span { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 8px; background: var(--accent-soft); }
+
+        /* ---------- Footer ---------- */
+        .foot {
+            display: flex; align-items: center; gap: 16px; height: 30px; padding: 0 16px;
+            border-top: 1px solid var(--line); background: var(--surface); color: var(--ink-3); font-size: 12px;
+            font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
+        }
+        .foot .keys-hint { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+        .foot .keys-hint button { border: 0; background: none; padding: 0; color: var(--ink-3); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+        .foot .keys-hint button:hover { color: var(--ink); }
+
+        /* ---------- Dialogs ---------- */
+        dialog {
+            padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink);
+            box-shadow: var(--shadow-lg); max-width: calc(100vw - 32px);
+        }
+        dialog::backdrop { background: rgba(10, 13, 19, .5); }
+        dialog[open] { animation: pop .16s cubic-bezier(.16, 1, .3, 1); }
+        @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+        .ask { width: 420px; }
+        .ask form { padding: 20px; }
+        .ask h2 { margin: 0 0 6px; font-size: 15px; font-weight: 650; }
+        .ask p { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+        .ask input[type=text] {
+            width: 100%; height: 34px; margin-top: 12px; padding: 0 10px; border-radius: 6px;
+            border: 1px solid var(--line-strong); background: var(--raised); color: var(--ink); font-size: 13px;
+        }
+        .ask input[type=text]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        .ask input[aria-invalid="true"] { border-color: var(--danger); }
+        .ask .err { min-height: 18px; margin-top: 6px; font-size: 12px; color: var(--danger); }
+        .ask .row-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+        .viewer { width: min(1100px, calc(100vw - 32px)); height: min(86vh, 900px); }
+        .viewer[open] { display: flex; flex-direction: column; }
+        .viewer-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--line); }
+        .viewer-head .i.big { width: 20px; height: 20px; color: var(--ink-3); }
+        .viewer-title { min-width: 0; flex: 1; }
+        .viewer-title h2 { margin: 0; font-size: 14px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .viewer-title .sub { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .viewer-body { flex: 1; min-height: 0; overflow: auto; background: var(--sunken); }
+        .viewer-body pre {
+            margin: 0; padding: 16px 18px; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4;
+            font: 12.5px/1.6 ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace; color: var(--ink);
+        }
+        .viewer-body iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+        .viewer-body .pic {
+            display: flex; align-items: center; justify-content: center; min-height: 100%; padding: 24px;
+            background-color: var(--surface);
+            background-image: linear-gradient(45deg, var(--hover) 25%, transparent 25%, transparent 75%, var(--hover) 75%),
+                              linear-gradient(45deg, var(--hover) 25%, transparent 25%, transparent 75%, var(--hover) 75%);
+            background-size: 20px 20px; background-position: 0 0, 10px 10px;
+        }
+        .viewer-body .pic img { max-width: 100%; max-height: 100%; box-shadow: var(--shadow); }
+        .notice { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 12.5px; color: var(--ink-2); background: var(--accent-soft); border-bottom: 1px solid var(--line); }
+
+        .keys-dialog { width: 400px; }
+        .keys-dialog .inner { padding: 20px; }
+        .keys-dialog h2 { margin: 0 0 12px; font-size: 15px; }
+        .keys-dialog dl { display: grid; grid-template-columns: auto 1fr; gap: 9px 16px; margin: 0; align-items: center; }
+        .keys-dialog dt { text-align: right; white-space: nowrap; }
+        .keys-dialog dd { margin: 0; color: var(--ink-2); }
+        .keys-dialog .row-btns { display: flex; justify-content: flex-end; margin-top: 18px; }
+
+        /* ---------- Toasts & uploads ---------- */
+        .toasts { position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
         .toast {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: var(--danger); color: #fff; padding: 10px 18px; border-radius: 8px;
-            font-size: 14px; box-shadow: var(--shadow); display: none; z-index: 20;
+            display: flex; align-items: center; gap: 8px; max-width: min(560px, calc(100vw - 32px)); padding: 9px 14px; border-radius: 8px;
+            background: var(--bar); color: var(--bar-ink); box-shadow: var(--shadow-lg); font-size: 13px; pointer-events: auto;
+            animation: pop .16s cubic-bezier(.16, 1, .3, 1);
         }
-        .toast.show { display: block; }
+        .toast .i { color: var(--live); }
+        .toast.error { background: var(--danger); color: #fff; }
+        .toast.error .i { color: #fff; }
+        .uploads {
+            position: fixed; right: 16px; bottom: 44px; z-index: 25; width: 300px; padding: 10px 12px;
+            border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-lg);
+        }
+        .uploads[hidden] { display: none; }
+        .uploads h3 { margin: 0 0 6px; font-size: 12px; font-weight: 650; color: var(--ink-2); }
+        .up { padding: 5px 0; font-size: 12px; }
+        .up .row1 { display: flex; gap: 8px; }
+        .up .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .up .pct { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+        .up.failed .pct { color: var(--danger); }
+        .up .track { height: 4px; margin-top: 4px; border-radius: 2px; background: var(--hover); overflow: hidden; }
+        .up .fill { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+        .up.failed .fill { background: var(--danger); }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; animation: none !important; }
+        }
+        @media (max-width: 760px) {
+            .brand .light, .sep, .conn-chip .cmd { display: none; }
+            .toolbar { padding: 8px 10px; }
+            .crumbs { flex-basis: 100%; }
+            .search { flex: 1; width: auto; }
+            .btn .txt { display: none; }
+            .btn:not(.icon) { padding: 0 9px; }
+            col.c-mod, th.c-mod, td.c-mod { display: none; }
+            col.c-size { width: 80px; }
+            col.c-act { width: 112px; }
+            .act[data-act="copy"] { display: none; }
+            .foot .keys-hint { display: none; }
+        }
     </style>
 </head>
 <body>
-<header>
-    <div class="brand"><span class="logo">📁</span> SFTP Console</div>
-    <div class="spacer"></div>
-    <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.8 4.3A1.5 1.5 0 0 1 3.3 2.8h2.9l1.5 1.6h5a1.5 1.5 0 0 1 1.5 1.5v6.3a1.5 1.5 0 0 1-1.5 1.5H3.3a1.5 1.5 0 0 1-1.5-1.5Z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 16 16"><path d="M9 1.8H4.5A1.5 1.5 0 0 0 3 3.3v9.4a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V5.8L9 1.8Z"/><path d="M9 1.8v4h4"/></symbol>
+    <symbol id="i-text" viewBox="0 0 16 16"><path d="M9 1.8H4.5A1.5 1.5 0 0 0 3 3.3v9.4a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V5.8L9 1.8Z"/><path d="M9 1.8v4h4M5.6 8.8h4.8M5.6 11.3h3.4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.6"/><circle cx="6" cy="6.3" r="1.2"/><path d="m14 10.8-3.3-3.3L4 13.5"/></symbol>
+    <symbol id="i-pdf" viewBox="0 0 16 16"><path d="M9 1.8H4.5A1.5 1.5 0 0 0 3 3.3v9.4a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V5.8L9 1.8Z"/><path d="M9 1.8v4h4M5.5 11.5h5M5.5 9h2"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 16 16"><path d="M9 1.8H4.5A1.5 1.5 0 0 0 3 3.3v9.4a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V5.8L9 1.8Z"/><path d="M7 3.5h1M7 5.5h1M7 7.5h1M6.5 9.5h2v2.3h-2Z"/></symbol>
+    <symbol id="i-code" viewBox="0 0 16 16"><path d="M9 1.8H4.5A1.5 1.5 0 0 0 3 3.3v9.4a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V5.8L9 1.8Z"/><path d="M9 1.8v4h4M6.6 8.5 5.2 10l1.4 1.5M9.4 8.5l1.4 1.5-1.4 1.5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 16 16"><path d="M8 10.5V2.5M4.8 5.5 8 2.3l3.2 3.2M2.5 10.5v1.8a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5v-1.8"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.5v8M4.8 7.5 8 10.7l3.2-3.2M2.5 10.5v1.8a1.5 1.5 0 0 0 1.5 1.5h8a1.5 1.5 0 0 0 1.5-1.5v-1.8"/></symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 16 16"><path d="M1.8 4.3A1.5 1.5 0 0 1 3.3 2.8h2.9l1.5 1.6h5a1.5 1.5 0 0 1 1.5 1.5v6.3a1.5 1.5 0 0 1-1.5 1.5H3.3a1.5 1.5 0 0 1-1.5-1.5Z"/><path d="M8 6.8v4M6 8.8h4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.3 7.2A5.4 5.4 0 1 0 12 11.4"/><path d="M13.5 2.8v4.4H9.1"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M2.5 13.5h2.8l7.4-7.4-2.8-2.8-7.4 7.4Z"/><path d="m9.2 4 2.8 2.8"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M4 4.5l.6 8.1a1.5 1.5 0 0 0 1.5 1.4h3.8a1.5 1.5 0 0 0 1.5-1.4L12 4.5M6.8 7v4.2M9.2 7v4.2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5h-.2A1.3 1.3 0 0 1 2 9.2V3.3A1.3 1.3 0 0 1 3.3 2h5.9a1.3 1.3 0 0 1 1.3 1.3v.2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m13.5 13.5-3.3-3.3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M8 13V3M4 7l4-4 4 4"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13V4M3.8 8.2 8 4l4.2 4.2"/></symbol>
+    <symbol id="i-left" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></symbol>
+    <symbol id="i-right" viewBox="0 0 16 16"><path d="m6 3.5 4.5 4.5L6 12.5"/></symbol>
+    <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.3 8 2.8l5.5 4.5M4 6.3v6.9h8V6.3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5M8 11h.01"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.3M8 13.2v1.3M1.5 8h1.3M13.2 8h1.3M3.4 3.4l.9.9M11.7 11.7l.9.9M3.4 12.6l.9-.9M11.7 4.3l.9-.9"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4.5 6.8h.01M7 6.8h.01M9.5 6.8h.01M12 6.8h.01M5 9.5h6"/></symbol>
+</svg>
+
+<header class="bar" id="bar">
+    <span class="brand">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <path class="shape" d="M2.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2Z"/>
+            <path class="shape" d="M7.5 12.5h6M11.5 10.5l2 2-2 2"/>
+            <circle class="cut" cx="19.5" cy="5.5" r="4.5"/>
+            <circle class="dot" cx="19.5" cy="5.5" r="2.8"/>
+        </svg>
+        <span>SFTP <span class="light">Console</span></span>
+    </span>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="conn-chip" id="connChip" type="button" title="Copy the connect command">
+        <span class="cmd" id="connCmd"></span>
+        <svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>
+        <span class="sr">Copy connect command</span>
+    </button>
+    <span class="status" id="status" role="status" hidden>Can’t reach the server, retrying</span>
+    <span class="spacer"></span>
+    <button class="bar-btn" id="keysBtn" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
+        <svg class="i" aria-hidden="true"><use href="#i-keyboard"/></svg>
+    </button>
+    <button class="bar-btn" id="themeBtn" type="button" aria-label="Toggle dark theme" title="Toggle light / dark">
+        <svg class="i theme-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+        <svg class="i theme-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+    </button>
 </header>
-<main>
-    <div class="toolbar">
-        <button class="btn" id="uploadBtn">⬆ Upload</button>
-        <button class="btn secondary" id="newFolderBtn">➕ New folder</button>
-        <button class="btn secondary" id="refreshBtn">🔄 Refresh</button>
-        <input type="file" id="fileInput" multiple hidden>
-    </div>
-    <nav class="breadcrumb" id="breadcrumb"></nav>
-    <div class="panel" id="panel">
-        <table>
-            <thead>
-            <tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr>
-            </thead>
-            <tbody id="rows"></tbody>
-        </table>
-        <div class="empty" id="empty" style="display:none;">This folder is empty. Drag files here or use Upload.</div>
-    </div>
+
+<div class="toolbar">
+    <nav class="crumbs" id="crumbs" aria-label="Folder path"></nav>
+    <label class="search">
+        <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+        <span class="sr">Filter this folder</span>
+        <input id="filter" type="search" placeholder="Filter this folder" autocomplete="off" spellcheck="false">
+        <kbd aria-hidden="true">/</kbd>
+    </label>
+    <button class="btn icon" id="upBtn" type="button" aria-label="Parent folder" title="Parent folder (Backspace)">
+        <svg class="i" aria-hidden="true"><use href="#i-up"/></svg>
+    </button>
+    <button class="btn icon" id="refreshBtn" type="button" aria-label="Refresh" title="Refresh (R)">
+        <svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>
+    </button>
+    <button class="btn" id="newFolderBtn" type="button" title="New folder (N)">
+        <svg class="i" aria-hidden="true"><use href="#i-folder-plus"/></svg><span class="txt">New folder</span>
+    </button>
+    <button class="btn primary" id="uploadBtn" type="button" title="Upload files (U)">
+        <svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="txt">Upload</span>
+    </button>
+    <input type="file" id="fileInput" multiple hidden>
+</div>
+
+<main class="pane" id="pane">
+    <table id="table">
+        <colgroup><col><col class="c-size"><col class="c-mod"><col class="c-act"></colgroup>
+        <thead>
+        <tr>
+            <th scope="col" data-key="name"><button class="sort" type="button">Name <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></button></th>
+            <th scope="col" class="num" data-key="size"><button class="sort" type="button">Size <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></button></th>
+            <th scope="col" class="c-mod" data-key="modified"><button class="sort" type="button">Modified <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></button></th>
+            <th scope="col"><span class="sr">Actions</span></th>
+        </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+    </table>
+    <div id="emptyHost"></div>
+    <div class="dropzone" aria-hidden="true"><span><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span id="dropLabel">Drop to upload</span></span></div>
 </main>
 
-<div class="overlay" id="previewOverlay">
-    <div class="modal">
-        <header><span id="previewTitle"></span><button class="btn close" id="previewClose">Close</button></header>
-        <div class="body" id="previewBody"></div>
-    </div>
-</div>
+<footer class="foot">
+    <span id="summary" aria-live="polite"></span>
+    <span id="refreshInfo"></span>
+    <span class="keys-hint">Press <kbd>?</kbd> for shortcuts</span>
+</footer>
 
-<div class="overlay" id="promptOverlay">
-    <div class="modal" style="max-width:420px;">
-        <header><span id="promptTitle"></span></header>
-        <div class="body">
-            <div id="promptMessage"></div>
-            <input type="text" class="prompt-input" id="promptInput">
-            <div class="prompt-actions">
-                <button class="btn secondary" id="promptCancel">Cancel</button>
-                <button class="btn" id="promptOk">OK</button>
-            </div>
+<dialog class="ask" id="ask">
+    <form method="dialog" id="askForm" novalidate>
+        <h2 id="askTitle"></h2>
+        <p id="askMessage"></p>
+        <input type="text" id="askInput" autocomplete="off" spellcheck="false" aria-describedby="askErr">
+        <div class="err" id="askErr" aria-live="polite"></div>
+        <div class="row-btns">
+            <button class="btn" type="button" id="askCancel">Cancel</button>
+            <button class="btn primary" type="submit" id="askOk">OK</button>
         </div>
-    </div>
-</div>
+    </form>
+</dialog>
 
-<div class="toast" id="toast"></div>
+<dialog class="viewer" id="viewer" aria-labelledby="viewerName">
+    <div class="viewer-head">
+        <svg class="i big" id="viewerIcon" aria-hidden="true"><use href="#i-file"/></svg>
+        <div class="viewer-title">
+            <h2 id="viewerName"></h2>
+            <div class="sub" id="viewerSub"></div>
+        </div>
+        <button class="btn icon" type="button" id="viewerPrev" aria-label="Previous file" title="Previous file (←)"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></button>
+        <button class="btn icon" type="button" id="viewerNext" aria-label="Next file" title="Next file (→)"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+        <button class="btn" type="button" id="viewerDownload"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span class="txt">Download</span></button>
+        <button class="btn icon" type="button" id="viewerClose" aria-label="Close preview" title="Close (Esc)"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div id="viewerNotice"></div>
+    <div class="viewer-body" id="viewerBody"></div>
+</dialog>
+
+<dialog class="keys-dialog" id="keysDialog" aria-labelledby="keysTitle">
+    <div class="inner">
+        <h2 id="keysTitle">Keyboard shortcuts</h2>
+        <dl>
+            <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Move between files</dd>
+            <dt><kbd>Enter</kbd></dt><dd>Open folder or preview file</dd>
+            <dt><kbd>Backspace</kbd></dt><dd>Go to the parent folder</dd>
+            <dt><kbd>F2</kbd></dt><dd>Rename the focused item</dd>
+            <dt><kbd>Delete</kbd></dt><dd>Delete the focused item</dd>
+            <dt><kbd>/</kbd></dt><dd>Filter this folder</dd>
+            <dt><kbd>U</kbd></dt><dd>Upload files</dd>
+            <dt><kbd>N</kbd></dt><dd>New folder</dd>
+            <dt><kbd>R</kbd></dt><dd>Refresh</dd>
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next file in preview</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Close a dialog or clear the filter</dd>
+        </dl>
+        <div class="row-btns"><button class="btn" type="button" id="keysClose">Close</button></div>
+    </div>
+</dialog>
+
+<div class="uploads" id="uploads" hidden aria-live="polite"><h3 id="uploadsTitle">Uploading</h3><div id="uploadList"></div></div>
+<div class="toasts" id="toasts"></div>
 
 <script>
     const BASE = "__BASE_PATH__";
     const API = BASE + "/api/files";
+    const REFRESH_MS = __REFRESH_MS__;   // 0 disables auto-refresh
+    const SFTP = { host: "__SFTP_HOST__", port: __SFTP_PORT__, user: "__SFTP_USER__" };
+    const INTERNAL_DND_TYPE = "application/x-sftp-entry";
+
     let currentPath = "/";
+    let entries = [];         // listing of currentPath as returned by the server
+    let signature = "";       // last listing, to skip re-rendering when nothing changed
+    let loaded = false;
+    let sort = { key: "name", dir: 1 };
+    let filterText = "";
     let pollTimer = null;
+    let dragging = false;
+    let viewerEntry = null;
+    let loadSeq = 0;
 
-    // ---- theme ----
-    const themeToggle = document.getElementById("themeToggle");
-    function applyTheme(theme) {
-        document.documentElement.setAttribute("data-theme", theme);
-        themeToggle.textContent = theme === "dark" ? "☀" : "🌙";
-    }
-    (function initTheme() {
-        const saved = localStorage.getItem("sftp-console-theme");
-        const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        applyTheme(saved || (prefersDark ? "dark" : "light"));
-    })();
-    themeToggle.addEventListener("click", () => {
-        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-        localStorage.setItem("sftp-console-theme", next);
-        applyTheme(next);
-    });
+    const $ = id => document.getElementById(id);
+    const svg = (name, cls) => {
+        const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        s.setAttribute("class", "i" + (cls ? " " + cls : ""));
+        s.setAttribute("aria-hidden", "true");
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttribute("href", "#i-" + name);
+        s.appendChild(use);
+        return s;
+    };
+    const el = (tag, props, ...children) => {
+        const n = document.createElement(tag);
+        if (props) Object.entries(props).forEach(([k, v]) => {
+            if (k === "class") n.className = v;
+            else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+            else if (k in n && typeof v !== "string") n[k] = v;
+            else n.setAttribute(k, v);
+        });
+        children.flat().forEach(c => c != null && n.append(c));
+        return n;
+    };
 
-    // ---- helpers ----
-    function toast(msg) {
-        const t = document.getElementById("toast");
-        t.textContent = msg; t.classList.add("show");
-        setTimeout(() => t.classList.remove("show"), 3500);
-    }
+    /* ---------- formatting ---------- */
     function formatSize(bytes) {
-        if (bytes === 0) return "—";
-        const units = ["B", "KB", "MB", "GB"];
-        let i = 0, n = bytes;
+        if (bytes == null) return "";
+        if (bytes < 1024) return bytes + " B";
+        const units = ["KB", "MB", "GB", "TB"];
+        let n = bytes / 1024, i = 0;
         while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-        return n.toFixed(i === 0 ? 0 : 1) + " " + units[i];
+        return (n < 10 ? n.toFixed(1) : Math.round(n)) + " " + units[i];
     }
-    function formatDate(iso) {
-        if (!iso) return "";
-        try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+    function formatRelative(iso) {
+        const d = new Date(iso);
+        if (!iso || isNaN(d)) return "";
+        const diff = (Date.now() - d.getTime()) / 1000;
+        if (diff < 10) return "just now";
+        if (diff < 60) return Math.floor(diff) + "s ago";
+        if (diff < 3600) return Math.floor(diff / 60) + " min ago";
+        if (diff < 86400) return Math.floor(diff / 3600) + " h ago";
+        if (diff < 7 * 86400) return Math.floor(diff / 86400) + " d ago";
+        return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
     }
-    function joinPath(dir, name) {
-        return dir.endsWith("/") ? dir + name : dir + "/" + name;
+    const formatAbsolute = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString(); };
+    function extension(name) {
+        const dot = name.lastIndexOf(".");
+        return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toLowerCase() : "";
+    }
+    function iconFor(entry) {
+        if (entry.directory) return "folder";
+        const ct = entry.contentType || "";
+        if (ct.startsWith("image/")) return "image";
+        if (ct === "application/pdf") return "pdf";
+        if (ct === "application/zip") return "archive";
+        if (/json|xml|javascript|java|css|html|yaml/.test(ct)) return "code";
+        if (ct.startsWith("text/")) return "text";
+        return "file";
+    }
+    const joinPath = (dir, name) => (dir.endsWith("/") ? dir : dir + "/") + name;
+    const parentOf = path => { const i = path.replace(/\/$/, "").lastIndexOf("/"); return i <= 0 ? "/" : path.slice(0, i); };
+    const download = entry => { window.location.href = API + "/download?path=" + encodeURIComponent(entry.path); };
+    const previewable = entry => {
+        const ct = entry.contentType || "";
+        return ct.startsWith("text/") || ct.startsWith("image/") || ct === "application/pdf"
+            || ct === "application/json" || ct === "application/xml" || ct === "application/javascript";
+    };
+
+    /* ---------- feedback ---------- */
+    function toast(message, kind) {
+        const error = kind === "error";
+        const t = el("div", { class: "toast" + (error ? " error" : ""), role: error ? "alert" : "status" },
+            svg(error ? "alert" : "check"), el("span", null, message));
+        $("toasts").append(t);
+        setTimeout(() => t.remove(), error ? 6000 : 2800);
     }
     async function api(method, url, options = {}) {
         const res = await fetch(url, { method, ...options });
-        if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            throw new Error(text || (res.status + " " + res.statusText));
-        }
+        if (!res.ok) throw new Error(await errorText(res));
         return res;
     }
-
-    // ---- breadcrumb ----
-    function renderBreadcrumb() {
-        const nav = document.getElementById("breadcrumb");
-        nav.innerHTML = "";
-        const parts = currentPath.split("/").filter(Boolean);
-        const root = document.createElement("a");
-        root.textContent = "🏠 root";
-        root.onclick = () => navigate("/");
-        makeMoveDropTarget(root, "/");
-        nav.appendChild(root);
-        let acc = "";
-        parts.forEach(part => {
-            acc += "/" + part;
-            const sep = document.createElement("span");
-            sep.className = "sep"; sep.textContent = "/";
-            nav.appendChild(sep);
-            const a = document.createElement("a");
-            a.textContent = part;
-            const target = acc;
-            a.onclick = () => navigate(target);
-            makeMoveDropTarget(a, target);
-            nav.appendChild(a);
-        });
+    async function errorText(res) {
+        if (res.status === 413) return "The file is larger than the upload limit (sftp.console.max-upload-size).";
+        const text = (await res.text().catch(() => "")).trim();
+        if (text && !text.startsWith("{") && !text.startsWith("<")) return text;
+        try { const j = JSON.parse(text); if (j.message || j.detail || j.error) return j.message || j.detail || j.error; } catch (e) {}
+        return res.status + " " + (res.statusText || "error");
+    }
+    function setOffline(off) {
+        $("status").hidden = !off;
+        $("bar").classList.toggle("offline", off);
+        $("bar").classList.toggle("live", !off && REFRESH_MS > 0);
     }
 
-    // ---- listing ----
-    async function load() {
-        try {
-            const res = await api("GET", API + "?path=" + encodeURIComponent(currentPath));
-            const entries = await res.json();
-            renderRows(entries);
-        } catch (e) {
-            toast("Failed to load: " + e.message);
+    /* ---------- location (#/path keeps the folder across reloads and Back) ---------- */
+    function pathFromHash() {
+        let p = "/";
+        try { p = decodeURIComponent(location.hash.replace(/^#/, "")) || "/"; } catch (e) {}
+        if (!p.startsWith("/")) p = "/" + p;
+        return p.length > 1 ? p.replace(/\/+$/, "") : p;
+    }
+    function navigate(path, focusPath) {
+        const target = path || "/";
+        if (target !== pathFromHash()) {
+            pendingFocus = focusPath || null;
+            location.hash = encodeURI(target);   // hashchange does the rest
+        } else {
+            openFolder(target, focusPath);
         }
     }
-    function renderRows(entries) {
-        const tbody = document.getElementById("rows");
-        const empty = document.getElementById("empty");
-        tbody.innerHTML = "";
-        empty.style.display = entries.length === 0 ? "block" : "none";
-        entries.forEach(entry => {
-            const tr = document.createElement("tr");
-            tr.draggable = true;
-            tr.addEventListener("dragstart", e => {
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData(INTERNAL_DND_TYPE,
-                    JSON.stringify({ path: entry.path, name: entry.name, directory: entry.directory }));
-                e.dataTransfer.setData("text/plain", entry.path);
-                tr.classList.add("dragging");
-            });
-            tr.addEventListener("dragend", () => tr.classList.remove("dragging"));
-            // Folders are drop targets: drop a file/folder onto them to move it there.
-            if (entry.directory) {
-                makeMoveDropTarget(tr, entry.path);
+    let pendingFocus = null;
+    window.addEventListener("hashchange", () => { openFolder(pathFromHash(), pendingFocus); pendingFocus = null; });
+    function openFolder(path, focusPath) {
+        const leaving = currentPath;
+        currentPath = path;
+        filterText = ""; $("filter").value = "";
+        signature = ""; loaded = false;
+        renderCrumbs();
+        renderSkeleton();
+        // Going up: put the cursor back on the folder we came from.
+        load({ focus: focusPath || (leaving.startsWith(path) && leaving !== path ? childOnTheWay(path, leaving) : null) });
+    }
+    const childOnTheWay = (ancestor, descendant) => {
+        const rest = descendant.slice(ancestor === "/" ? 1 : ancestor.length + 1).split("/")[0];
+        return joinPath(ancestor, rest);
+    };
+
+    /* ---------- breadcrumb ---------- */
+    function renderCrumbs() {
+        const nav = $("crumbs");
+        nav.replaceChildren();
+        const parts = currentPath.split("/").filter(Boolean);
+        const crumb = (label, path, isLast, iconName) => {
+            const b = el("button", { class: "crumb", type: "button", title: path }, iconName ? svg(iconName) : null, el("span", null, label));
+            if (isLast) b.setAttribute("aria-current", "page");
+            else b.addEventListener("click", () => navigate(path));
+            makeMoveDropTarget(b, path);
+            return b;
+        };
+        nav.append(crumb("root", "/", parts.length === 0, "home"));
+        let acc = "";
+        parts.forEach((part, i) => {
+            acc += "/" + part;
+            nav.append(el("span", { class: "crumb-sep", "aria-hidden": "true" }, svg("chev")), crumb(part, acc, i === parts.length - 1));
+        });
+        $("upBtn").disabled = parts.length === 0;
+        document.title = (parts.length ? parts[parts.length - 1] + " · " : "") + "SFTP Console";
+    }
+
+    /* ---------- listing ---------- */
+    async function load(opts = {}) {
+        const seq = ++loadSeq;
+        const path = currentPath;
+        try {
+            const res = await fetch(API + "?path=" + encodeURIComponent(path));
+            if (seq !== loadSeq || path !== currentPath) return;
+            setOffline(false);
+            if (res.status === 404 && path !== "/") {
+                toast("“" + path + "” no longer exists — showing its parent folder.", "error");
+                navigate(parentOf(path));
+                return;
             }
+            if (!res.ok) throw new Error(await errorText(res));
+            const text = await res.text();
+            if (text === signature && loaded && !opts.force) return;   // unchanged: keep DOM, focus and hover
+            signature = text;
+            entries = JSON.parse(text);
+            loaded = true;
+            render(opts.focus);
+        } catch (e) {
+            if (seq !== loadSeq) return;
+            if (e instanceof TypeError) { setOffline(true); if (!loaded) renderEmpty("offline"); }
+            else toast("Couldn’t load the folder: " + e.message, "error");
+        }
+    }
+    function visibleEntries() {
+        const q = filterText.toLowerCase();
+        const list = q ? entries.filter(e => e.name.toLowerCase().includes(q)) : entries.slice();
+        const cmp = {
+            name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+            size: (a, b) => (a.size - b.size) || cmp.name(a, b),
+            modified: (a, b) => (new Date(a.lastModified) - new Date(b.lastModified)) || cmp.name(a, b)
+        };
+        // Folders always stay on top, whatever the sort.
+        return list.sort((a, b) => (b.directory - a.directory) || sort.dir * cmp[sort.key](a, b));
+    }
+    function render(focusPath) {
+        const tbody = $("rows");
+        const active = document.activeElement;
+        const keep = focusPath || (tbody.contains(active) ? active.closest("tr")?.dataset.path : null);
+        const keepAction = !focusPath && tbody.contains(active) ? active.dataset.act : null;
+        const list = visibleEntries();
 
-            const nameTd = document.createElement("td");
-            nameTd.className = "name";
-            const icon = document.createElement("span");
-            icon.className = "icon";
-            icon.textContent = entry.directory ? "📂" : fileIcon(entry.contentType);
-            const link = document.createElement("span");
-            link.className = "link";
-            link.textContent = entry.name;
-            link.onclick = () => entry.directory ? navigate(entry.path) : openPreview(entry);
-            nameTd.appendChild(icon); nameTd.appendChild(link);
+        tbody.replaceChildren(...list.map(rowFor));
+        $("table").hidden = list.length === 0;
+        if (list.length === 0) renderEmpty(entries.length === 0 ? "empty" : "nomatch");
+        else $("emptyHost").replaceChildren();
+        renderSummary(list);
 
-            const sizeTd = document.createElement("td");
-            sizeTd.className = "size";
-            sizeTd.textContent = entry.directory ? "—" : formatSize(entry.size);
-
-            const modTd = document.createElement("td");
-            modTd.className = "modified";
-            modTd.textContent = formatDate(entry.lastModified);
-
-            const actionsTd = document.createElement("td");
-            actionsTd.className = "actions";
-            if (!entry.directory) {
-                actionsTd.appendChild(iconButton("⬇", "Download", () => {
-                    window.location = API + "/download?path=" + encodeURIComponent(entry.path);
-                }));
-            }
-            actionsTd.appendChild(iconButton("✎", "Rename", () => renameEntry(entry)));
-            actionsTd.appendChild(iconButton("🗑", "Delete", () => deleteEntry(entry), true));
-
-            tr.appendChild(nameTd); tr.appendChild(sizeTd);
-            tr.appendChild(modTd); tr.appendChild(actionsTd);
-            tbody.appendChild(tr);
+        if (keep) {
+            const row = tbody.querySelector('tr[data-path="' + CSS.escape(keep) + '"]');
+            const target = row && (keepAction ? row.querySelector('[data-act="' + keepAction + '"]') : row.querySelector(".name"));
+            if (target) { target.focus({ preventScroll: !focusPath }); if (focusPath) target.scrollIntoView({ block: "nearest" }); }
+        }
+        document.querySelectorAll("th[data-key]").forEach(th => {
+            if (th.dataset.key === sort.key) th.setAttribute("aria-sort", sort.dir > 0 ? "ascending" : "descending");
+            else th.removeAttribute("aria-sort");
         });
     }
-    function fileIcon(contentType) {
-        if (!contentType) return "📄";
-        if (contentType.startsWith("image/")) return "🖼";
-        if (contentType === "application/pdf") return "📕";
-        if (contentType.startsWith("text/") || contentType === "application/json"
-            || contentType === "application/xml") return "📄";
-        return "📦";
+    function rowFor(entry) {
+        const ext = entry.directory ? "" : extension(entry.name);
+        const nameBtn = el("button", {
+                class: "name" + (entry.directory ? " dir" : ""), type: "button",
+                title: entry.directory ? "Open folder" : (previewable(entry) ? "Preview" : "Download"),
+                onclick: () => openEntry(entry)
+            },
+            svg(iconFor(entry)),
+            el("span", { class: "label" }, entry.name),
+            ext && ext.length <= 5 ? el("span", { class: "ext", "aria-hidden": "true" }, ext) : null);
+
+        const act = (iconName, label, key, onClick, danger) => el("button", {
+            class: "act" + (danger ? " danger" : ""), type: "button", title: label, "aria-label": label + ": " + entry.name,
+            "data-act": key, onclick: onClick
+        }, svg(iconName));
+
+        const tr = el("tr", { "data-path": entry.path, draggable: "true" },
+            el("td", null, nameBtn),
+            el("td", { class: "meta num" }, entry.directory ? "—" : formatSize(entry.size)),
+            el("td", { class: "meta c-mod", title: formatAbsolute(entry.lastModified) }, formatRelative(entry.lastModified)),
+            el("td", { class: "acts" },
+                entry.directory ? null : act("download", "Download", "download", () => download(entry)),
+                act("copy", "Copy path", "copy", () => copyText(entry.path, "Path copied")),
+                act("pencil", "Rename", "rename", () => renameEntry(entry)),
+                act("trash", "Delete", "delete", () => deleteEntry(entry), true)));
+
+        tr.addEventListener("dragstart", e => {
+            dragging = true;
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData(INTERNAL_DND_TYPE, JSON.stringify({ path: entry.path, name: entry.name, directory: entry.directory }));
+            e.dataTransfer.setData("text/plain", entry.path);
+            tr.classList.add("dragging");
+        });
+        tr.addEventListener("dragend", () => { dragging = false; tr.classList.remove("dragging"); });
+        if (entry.directory) makeMoveDropTarget(tr, entry.path);
+        return tr;
     }
-    function iconButton(label, title, onClick, danger) {
-        const b = document.createElement("button");
-        b.className = "icon-btn" + (danger ? " danger" : "");
-        b.textContent = label; b.title = title; b.onclick = onClick;
-        return b;
+    function renderSkeleton() {
+        $("table").hidden = false;
+        $("emptyHost").replaceChildren();
+        $("rows").replaceChildren(...[62, 48, 70, 40].map(w => el("tr", { class: "skeleton", "aria-hidden": "true" },
+            el("td", null, el("span", { style: "width:" + w + "%" })), el("td", null, el("span", { style: "width:60%;margin-left:auto" })),
+            el("td", { class: "c-mod" }, el("span", { style: "width:70%" })), el("td"))));
+        $("summary").textContent = "Loading…";
     }
-    function navigate(path) {
-        currentPath = path || "/";
-        renderBreadcrumb();
-        load();
+    function renderEmpty(kind) {
+        $("table").hidden = true;
+        let content;
+        if (kind === "nomatch") {
+            content = [svg("search", "art"), el("h2", null, "No matches"),
+                el("p", null, "Nothing in this folder matches “" + filterText + "”."),
+                el("button", { class: "btn", type: "button", onclick: clearFilter }, "Clear filter")];
+        } else if (kind === "offline") {
+            content = [svg("alert", "art"), el("h2", null, "Can’t reach the server"),
+                el("p", null, "The console will retry automatically. Check that the application is running.")];
+        } else {
+            content = [svg("folder", "art"), el("h2", null, currentPath === "/" ? "No files yet" : "This folder is empty"),
+                el("p", null, "Drop files anywhere here, use Upload, or put them over SFTP with ", el("code", null, connectCommand()), "."),
+                el("button", { class: "btn primary", type: "button", onclick: () => $("fileInput").click() }, svg("upload"), "Upload files")];
+        }
+        $("emptyHost").replaceChildren(el("div", { class: "empty" }, content));
+        if (kind !== "nomatch") renderSummary([]);
+    }
+    function renderSummary(list) {
+        const folders = list.filter(e => e.directory).length;
+        const files = list.length - folders;
+        const bytes = list.reduce((sum, e) => sum + (e.directory ? 0 : e.size), 0);
+        const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+        let text = plural(folders, "folder") + ", " + plural(files, "file") + (files ? " · " + formatSize(bytes) : "");
+        if (filterText) text += " (filtered from " + entries.length + ")";
+        $("summary").textContent = text;
     }
 
-    // ---- preview ----
-    async function openPreview(entry) {
-        const overlay = document.getElementById("previewOverlay");
-        const title = document.getElementById("previewTitle");
-        const body = document.getElementById("previewBody");
-        title.textContent = entry.name;
-        body.innerHTML = "";
+    /* ---------- open / preview ---------- */
+    function openEntry(entry) {
+        if (entry.directory) navigate(entry.path);
+        else openViewer(entry);
+    }
+    async function openViewer(entry) {
+        viewerEntry = entry;
+        const files = visibleEntries().filter(e => !e.directory);
+        const idx = files.findIndex(e => e.path === entry.path);
+        $("viewerPrev").disabled = idx <= 0;
+        $("viewerNext").disabled = idx < 0 || idx >= files.length - 1;
+        $("viewerName").textContent = entry.name;
+        $("viewerSub").textContent = [formatSize(entry.size), entry.contentType, formatAbsolute(entry.lastModified)].filter(Boolean).join(" · ");
+        $("viewerIcon").replaceWith(Object.assign(svg(iconFor(entry), "big"), { id: "viewerIcon" }));
+        $("viewerNotice").replaceChildren();
+        const body = $("viewerBody");
+        body.replaceChildren();
+        if (!$("viewer").open) $("viewer").showModal();
+        $("viewerClose").focus();
+
         const url = API + "/preview?path=" + encodeURIComponent(entry.path);
         const ct = entry.contentType || "";
-        if (ct.startsWith("image/")) {
-            const img = document.createElement("img");
-            img.src = url; body.appendChild(img);
-            overlay.classList.add("open");
+        if (!previewable(entry)) {
+            body.append(el("div", { class: "empty" }, svg(iconFor(entry), "art"), el("h2", null, "No preview for this file type"),
+                el("p", null, (entry.contentType || "Binary file") + " · " + formatSize(entry.size)),
+                el("button", { class: "btn primary", type: "button", onclick: () => download(entry) }, svg("download"), "Download")));
+        } else if (ct.startsWith("image/")) {
+            body.append(el("div", { class: "pic" }, el("img", { src: url, alt: entry.name })));
         } else if (ct === "application/pdf") {
-            const frame = document.createElement("iframe");
-            frame.src = url;
-            frame.title = entry.name;
-            frame.style.cssText = "width:100%; height:75vh; border:0; background:#fff;";
-            body.appendChild(frame);
-            overlay.classList.add("open");
+            body.append(el("iframe", { src: url, title: entry.name }));
         } else {
             try {
                 const res = await api("GET", url);
                 const text = await res.text();
-                const pre = document.createElement("pre");
-                pre.textContent = text; body.appendChild(pre);
+                if (viewerEntry !== entry) return;
+                if (res.headers.get("X-Preview-Truncated") === "true") {
+                    $("viewerNotice").replaceChildren(el("div", { class: "notice" }, svg("alert"),
+                        "Showing the first " + formatSize(new Blob([text]).size) + " of " + formatSize(entry.size) + ". Download the file to see all of it."));
+                }
+                body.append(el("pre", { tabindex: "0" }, text || "(empty file)"));
             } catch (e) {
-                // Binary/office files (e.g. .xlsx, .docx, .zip) can't be shown inline in a
-                // browser — offer a download instead of failing silently.
-                const msg = document.createElement("div");
-                msg.className = "muted";
-                msg.textContent = "Preview isn't available for this file type.";
-                const dl = document.createElement("button");
-                dl.className = "btn"; dl.textContent = "⬇ Download";
-                dl.style.marginTop = "14px";
-                dl.onclick = () => { window.location = API + "/download?path=" + encodeURIComponent(entry.path); };
-                body.appendChild(msg); body.appendChild(dl);
+                if (viewerEntry !== entry) return;
+                body.append(el("div", { class: "empty" }, svg("alert", "art"), el("h2", null, "Couldn’t load the preview"), el("p", null, e.message)));
             }
-            overlay.classList.add("open");
         }
     }
-    document.getElementById("previewClose").onclick =
-        () => document.getElementById("previewOverlay").classList.remove("open");
+    function stepViewer(delta) {
+        if (!viewerEntry) return;
+        const files = visibleEntries().filter(e => !e.directory);
+        const next = files[files.findIndex(e => e.path === viewerEntry.path) + delta];
+        if (next) openViewer(next);
+    }
+    $("viewerPrev").onclick = () => stepViewer(-1);
+    $("viewerNext").onclick = () => stepViewer(1);
+    $("viewerDownload").onclick = () => viewerEntry && download(viewerEntry);
+    $("viewerClose").onclick = () => $("viewer").close();
+    $("viewer").addEventListener("close", () => {
+        const path = viewerEntry && viewerEntry.path;
+        viewerEntry = null;
+        $("viewerBody").replaceChildren();
+        if (path) $("rows").querySelector('tr[data-path="' + CSS.escape(path) + '"] .name')?.focus();
+    });
+    $("viewer").addEventListener("keydown", e => {
+        if (e.target.closest("pre")) return;
+        if (e.key === "ArrowLeft") { e.preventDefault(); stepViewer(-1); }
+        if (e.key === "ArrowRight") { e.preventDefault(); stepViewer(1); }
+    });
+    $("viewer").addEventListener("click", e => { if (e.target === $("viewer")) $("viewer").close(); });
 
-    // ---- prompt modal (returns a Promise<string|null>) ----
-    function prompt(title, message, defaultValue) {
+    /* ---------- ask dialog: confirm (no input) or prompt (validated name) ---------- */
+    function ask({ title, message, value, okLabel, danger, validate }) {
         return new Promise(resolve => {
-            const overlay = document.getElementById("promptOverlay");
-            document.getElementById("promptTitle").textContent = title;
-            document.getElementById("promptMessage").textContent = message || "";
-            const input = document.getElementById("promptInput");
-            input.value = defaultValue || "";
-            const showInput = defaultValue !== undefined;
-            input.style.display = showInput ? "block" : "none";
-            overlay.classList.add("open");
-            if (showInput) input.focus();
-            const ok = document.getElementById("promptOk");
-            const cancel = document.getElementById("promptCancel");
-            function cleanup(result) {
-                overlay.classList.remove("open");
-                ok.onclick = null; cancel.onclick = null;
+            const dlg = $("ask"), input = $("askInput"), err = $("askErr"), ok = $("askOk");
+            $("askTitle").textContent = title;
+            $("askMessage").textContent = message || "";
+            $("askMessage").hidden = !message;
+            const withInput = value !== undefined;
+            input.hidden = !withInput;
+            input.value = withInput ? value : "";
+            input.removeAttribute("aria-invalid");
+            input.setAttribute("aria-label", title);
+            err.textContent = "";
+            err.hidden = !withInput;
+            ok.textContent = okLabel || "OK";
+            ok.className = "btn " + (danger ? "danger-solid" : "primary");
+            let result = null;
+            const submit = e => {
+                e.preventDefault();
+                if (withInput) {
+                    const problem = validate && validate(input.value.trim());
+                    if (problem) { err.textContent = problem; input.setAttribute("aria-invalid", "true"); input.focus(); return; }
+                    result = input.value.trim();
+                } else {
+                    result = true;
+                }
+                dlg.close();
+            };
+            const onClose = () => {
+                $("askForm").removeEventListener("submit", submit);
+                dlg.removeEventListener("close", onClose);
                 resolve(result);
+            };
+            $("askForm").addEventListener("submit", submit);
+            dlg.addEventListener("close", onClose);
+            $("askCancel").onclick = () => dlg.close();
+            dlg.showModal();
+            if (withInput) {
+                input.focus();
+                // Select the base name so typing replaces it but keeps the extension.
+                const dot = value.lastIndexOf(".");
+                input.setSelectionRange(0, dot > 0 ? dot : value.length);
+            } else {
+                (danger ? $("askCancel") : ok).focus();
             }
-            ok.onclick = () => cleanup(input.value);
-            cancel.onclick = () => cleanup(null);
         });
     }
+    function validName(existingNames, current) {
+        return name => {
+            if (!name) return "Enter a name.";
+            if (name === "." || name === "..") return "That name is reserved.";
+            if (/[\/\\]/.test(name)) return "Names can’t contain / or \\.";
+            if (name !== current && existingNames.has(name)) return "Something named “" + name + "” already exists here.";
+            return null;
+        };
+    }
 
-    // ---- actions ----
+    /* ---------- actions ---------- */
     async function newFolder() {
-        const name = await prompt("New folder", "Folder name:", "");
+        const name = await ask({ title: "New folder", value: "", okLabel: "Create", validate: validName(new Set(entries.map(e => e.name))) });
         if (!name) return;
+        const path = joinPath(currentPath, name);
         try {
-            await api("POST", API + "/folder?path=" + encodeURIComponent(joinPath(currentPath, name)));
-            load();
-        } catch (e) { toast("Create folder failed: " + e.message); }
+            await api("POST", API + "/folder?path=" + encodeURIComponent(path));
+            await load({ focus: path, force: true });
+            flash(path);
+        } catch (e) { toast("Couldn’t create the folder: " + e.message, "error"); }
     }
     async function renameEntry(entry) {
-        const name = await prompt("Rename", "New name:", entry.name);
+        const name = await ask({ title: "Rename", message: entry.directory ? "Folder in " + currentPath : null, value: entry.name,
+            okLabel: "Rename", validate: validName(new Set(entries.map(e => e.name)), entry.name) });
         if (!name || name === entry.name) return;
-        const to = joinPath(currentPath, name);
+        const to = joinPath(parentOf(entry.path), name);
         try {
-            await api("POST", API + "/rename", {
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ from: entry.path, to })
-            });
-            load();
-        } catch (e) { toast("Rename failed: " + e.message); }
+            await api("POST", API + "/rename", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: entry.path, to }) });
+            await load({ focus: to, force: true });
+            flash(to);
+            toast("Renamed to " + name);
+        } catch (e) { toast("Couldn’t rename: " + e.message, "error"); }
     }
     async function deleteEntry(entry) {
-        const ok = await prompt("Delete", "Delete \"" + entry.name + "\"? This cannot be undone.");
-        if (ok === null) return;
+        const ok = await ask({
+            title: entry.directory ? "Delete folder?" : "Delete file?",
+            message: "“" + entry.name + "”" + (entry.directory ? " and everything inside it" : "") + " will be permanently deleted.",
+            okLabel: "Delete", danger: true
+        });
+        if (!ok) return;
+        const list = visibleEntries();
+        const i = list.findIndex(e => e.path === entry.path);
+        const neighbour = list[i + 1] || list[i - 1];
         try {
             await api("DELETE", API + "?path=" + encodeURIComponent(entry.path));
-            load();
-        } catch (e) { toast("Delete failed: " + e.message); }
+            await load({ focus: neighbour && neighbour.path, force: true });
+            toast("Deleted " + entry.name);
+        } catch (e) { toast("Couldn’t delete: " + e.message, "error"); }
     }
-    async function uploadFiles(fileList) {
-        for (const file of fileList) {
-            const form = new FormData();
-            form.append("file", file);
-            try {
-                await api("POST", API + "/upload?path=" + encodeURIComponent(currentPath), { body: form });
-            } catch (e) { toast("Upload failed for " + file.name + ": " + e.message); }
-        }
-        load();
-    }
-
-    document.getElementById("newFolderBtn").onclick = newFolder;
-    document.getElementById("refreshBtn").onclick = load;
-    document.getElementById("uploadBtn").onclick = () => document.getElementById("fileInput").click();
-    document.getElementById("fileInput").onchange = (e) => {
-        if (e.target.files.length) uploadFiles(e.target.files);
-        e.target.value = "";
-    };
-
-    // ---- move (internal drag-and-drop between folders) ----
-    const INTERNAL_DND_TYPE = "application/x-sftp-entry";
-
-    // Turns an element into a drop target that moves a dragged file/folder into targetDir.
-    function makeMoveDropTarget(el, targetDir) {
-        el.addEventListener("dragover", e => {
-            if (!e.dataTransfer.types.includes(INTERNAL_DND_TYPE)) return; // ignore OS-file drags
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-            el.classList.add("drop-target");
-        });
-        el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
-        el.addEventListener("drop", e => {
-            if (!e.dataTransfer.types.includes(INTERNAL_DND_TYPE)) return;
-            e.preventDefault();
-            e.stopPropagation(); // don't let the panel treat this as an upload
-            el.classList.remove("drop-target");
-            let src;
-            try { src = JSON.parse(e.dataTransfer.getData(INTERNAL_DND_TYPE)); }
-            catch (err) { return; }
-            moveEntry(src, targetDir);
-        });
-    }
-
     async function moveEntry(src, targetDir) {
         const to = joinPath(targetDir, src.name);
-        if (to === src.path) return; // already in this folder — no-op
+        if (to === src.path || parentOf(src.path) === targetDir) return;
         if (src.directory && (targetDir === src.path || targetDir.startsWith(src.path + "/"))) {
-            toast("Can't move a folder into itself.");
+            toast("Can’t move a folder into itself.", "error");
             return;
         }
         try {
-            await api("POST", API + "/rename", {
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ from: src.path, to })
-            });
-            load();
-        } catch (e) { toast("Move failed: " + e.message); }
+            await api("POST", API + "/rename", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ from: src.path, to }) });
+            await load({ force: true });
+            toast("Moved " + src.name + " to " + (targetDir === "/" ? "root" : targetDir));
+        } catch (e) { toast("Couldn’t move: " + e.message, "error"); }
+    }
+    async function copyText(text, done) {
+        try { await navigator.clipboard.writeText(text); toast(done); }
+        catch (e) { toast("Clipboard not available — " + text, "error"); }
+    }
+    function flash(path) {
+        const row = $("rows").querySelector('tr[data-path="' + CSS.escape(path) + '"]');
+        if (row) { row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1700); }
     }
 
-    // ---- drag & drop upload (OS files → current folder) ----
-    const panel = document.getElementById("panel");
-    function isFileDrag(e) {
-        return e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    /* ---------- uploads (XHR for progress) ---------- */
+    async function uploadFiles(fileList) {
+        const files = Array.from(fileList);
+        if (!files.length) return;
+        const dir = currentPath;
+        const existing = new Set(entries.filter(e => !e.directory).map(e => e.name));
+        const clashes = files.filter(f => existing.has(f.name));
+        if (clashes.length) {
+            const ok = await ask({
+                title: clashes.length === 1 ? "Replace file?" : "Replace " + clashes.length + " files?",
+                message: (clashes.length === 1 ? "“" + clashes[0].name + "” already exists" : clashes.map(f => f.name).join(", ") + " already exist")
+                    + " in this folder. Uploading will replace " + (clashes.length === 1 ? "it." : "them."),
+                okLabel: "Replace", danger: true
+            });
+            if (!ok) return;
+        }
+        const tray = $("uploads"), listEl = $("uploadList");
+        listEl.replaceChildren();
+        tray.hidden = false;
+        $("uploadsTitle").textContent = "Uploading " + files.length + (files.length === 1 ? " file" : " files");
+        let failed = 0, last = null;
+        for (const file of files) {
+            const fill = el("div", { class: "fill" }), pct = el("span", { class: "pct" }, "0%");
+            const item = el("div", { class: "up" }, el("div", { class: "row1" }, el("span", { class: "fname" }, file.name), pct),
+                el("div", { class: "track" }, fill));
+            listEl.append(item);
+            try {
+                await sendFile(dir, file, p => { fill.style.width = p + "%"; pct.textContent = p + "%"; });
+                fill.style.width = "100%"; pct.textContent = "Done";
+                last = joinPath(dir, file.name);
+            } catch (e) {
+                failed++;
+                item.classList.add("failed"); pct.textContent = "Failed";
+                item.title = e.message;
+                toast("Upload failed for " + file.name + ": " + e.message, "error");
+            }
+        }
+        if (dir === currentPath) await load({ focus: last, force: true });
+        if (last) flash(last);
+        const okCount = files.length - failed;
+        if (okCount) toast("Uploaded " + okCount + (okCount === 1 ? " file" : " files"));
+        setTimeout(() => { tray.hidden = true; }, failed ? 5000 : 1500);
     }
-    ["dragenter", "dragover"].forEach(ev => panel.addEventListener(ev, e => {
-        if (!isFileDrag(e)) return; // ignore internal move drags
-        e.preventDefault(); panel.classList.add("dragover");
-    }));
-    ["dragleave", "drop"].forEach(ev => panel.addEventListener(ev, e => {
+    function sendFile(dir, file, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", API + "/upload?path=" + encodeURIComponent(dir));
+            xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.min(99, Math.round(e.loaded / e.total * 100))); };
+            xhr.onload = async () => {
+                if (xhr.status >= 200 && xhr.status < 300) return resolve();
+                const res = new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText });
+                reject(new Error(await errorText(res)));
+            };
+            xhr.onerror = () => reject(new Error("network error"));
+            const form = new FormData();
+            form.append("file", file);
+            xhr.send(form);
+        });
+    }
+
+    /* ---------- drag and drop ---------- */
+    // Rows and breadcrumbs accept internal drags (move); the pane accepts OS files (upload).
+    function makeMoveDropTarget(target, targetDir) {
+        target.addEventListener("dragover", e => {
+            if (!e.dataTransfer.types.includes(INTERNAL_DND_TYPE)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            target.classList.add("drop-target");
+        });
+        target.addEventListener("dragleave", e => { if (!target.contains(e.relatedTarget)) target.classList.remove("drop-target"); });
+        target.addEventListener("drop", e => {
+            if (!e.dataTransfer.types.includes(INTERNAL_DND_TYPE)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            target.classList.remove("drop-target");
+            let src;
+            try { src = JSON.parse(e.dataTransfer.getData(INTERNAL_DND_TYPE)); } catch (err) { return; }
+            moveEntry(src, targetDir);
+        });
+    }
+    const pane = $("pane");
+    const isFileDrag = e => e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    let dragDepth = 0;
+    pane.addEventListener("dragenter", e => {
         if (!isFileDrag(e)) return;
         e.preventDefault();
-        if (ev === "drop" || e.target === panel) panel.classList.remove("dragover");
-    }));
-    panel.addEventListener("drop", e => {
-        if (isFileDrag(e) && e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+        dragDepth++;
+        $("dropLabel").textContent = "Drop to upload to " + (currentPath === "/" ? "root" : currentPath);
+        pane.classList.add("dragover");
+    });
+    pane.addEventListener("dragover", e => { if (isFileDrag(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+    pane.addEventListener("dragleave", e => { if (isFileDrag(e) && --dragDepth <= 0) { dragDepth = 0; pane.classList.remove("dragover"); } });
+    pane.addEventListener("drop", e => {
+        if (!isFileDrag(e)) return;
+        e.preventDefault();
+        dragDepth = 0;
+        pane.classList.remove("dragover");
+        if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
     });
 
-    // ---- live refresh (poll while the tab is visible and no modal is open) ----
-    const REFRESH_MS = __REFRESH_MS__;   // 0 disables auto-refresh
+    /* ---------- filter & sort ---------- */
+    function clearFilter() { filterText = ""; $("filter").value = ""; render(); }
+    $("filter").addEventListener("input", e => { filterText = e.target.value.trim(); render(); });
+    $("filter").addEventListener("keydown", e => {
+        if (e.key === "Escape" && $("filter").value) { e.preventDefault(); clearFilter(); }
+        else if (e.key === "Escape") $("filter").blur();
+        else if (e.key === "ArrowDown" || e.key === "Enter") { e.preventDefault(); $("rows").querySelector(".name")?.focus(); }
+    });
+    document.querySelectorAll("th[data-key] .sort").forEach(b => b.addEventListener("click", () => {
+        const key = b.closest("th").dataset.key;
+        sort = { key, dir: sort.key === key ? -sort.dir : (key === "name" ? 1 : -1) };
+        render();
+    }));
+
+    /* ---------- keyboard ---------- */
+    function focusedEntry() {
+        const tr = document.activeElement && document.activeElement.closest && document.activeElement.closest("#rows tr");
+        return tr ? entries.find(e => e.path === tr.dataset.path) : null;
+    }
+    $("rows").addEventListener("keydown", e => {
+        const names = Array.from($("rows").querySelectorAll(".name"));
+        const tr = e.target.closest("tr");
+        const i = names.indexOf(tr && tr.querySelector(".name"));
+        const go = n => { if (names[n]) { e.preventDefault(); names[n].focus(); names[n].scrollIntoView({ block: "nearest" }); } };
+        if (e.key === "ArrowDown" || e.key === "j") go(i + 1);
+        else if (e.key === "ArrowUp" || e.key === "k") { if (i === 0) { e.preventDefault(); $("filter").focus(); } else go(i - 1); }
+        else if (e.key === "Home") go(0);
+        else if (e.key === "End") go(names.length - 1);
+    });
+    document.addEventListener("keydown", e => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (document.querySelector("dialog[open]")) return;
+        const typing = e.target.matches("input, textarea, [contenteditable]");
+        if (typing) return;
+        const entry = focusedEntry();
+        switch (e.key) {
+            case "/": e.preventDefault(); $("filter").focus(); $("filter").select(); break;
+            case "?": e.preventDefault(); $("keysDialog").showModal(); break;
+            case "u": case "U": e.preventDefault(); $("fileInput").click(); break;
+            case "n": case "N": e.preventDefault(); newFolder(); break;
+            case "r": case "R": e.preventDefault(); refresh(); break;
+            case "Backspace": if (currentPath !== "/") { e.preventDefault(); navigate(parentOf(currentPath)); } break;
+            case "F2": if (entry) { e.preventDefault(); renameEntry(entry); } break;
+            case "Delete": if (entry) { e.preventDefault(); deleteEntry(entry); } break;
+            case "ArrowDown":
+                if (!entry && document.activeElement === document.body) { e.preventDefault(); $("rows").querySelector(".name")?.focus(); }
+                break;
+        }
+    });
+
+    /* ---------- toolbar & bar ---------- */
+    async function refresh() {
+        await load({ force: true });
+        toast("Up to date");
+    }
+    $("refreshBtn").onclick = refresh;
+    $("upBtn").onclick = () => navigate(parentOf(currentPath));
+    $("newFolderBtn").onclick = newFolder;
+    $("uploadBtn").onclick = () => $("fileInput").click();
+    $("fileInput").onchange = e => { const files = Array.from(e.target.files); e.target.value = ""; uploadFiles(files); };
+    $("keysBtn").onclick = () => $("keysDialog").showModal();
+    $("keysClose").onclick = () => $("keysDialog").close();
+    $("themeBtn").onclick = () => {
+        const root = document.documentElement;
+        const dark = root.getAttribute("data-theme") === "dark"
+            || (!root.hasAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+        const next = dark ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("sftp-console-theme", next); } catch (e) {}
+    };
+    function connectCommand() {
+        return "sftp " + (SFTP.port && SFTP.port !== 22 ? "-P " + SFTP.port + " " : "") + (SFTP.user ? SFTP.user + "@" : "") + (SFTP.host || "localhost");
+    }
+    $("connCmd").textContent = connectCommand();
+    $("connChip").onclick = () => copyText(connectCommand(), "Connect command copied");
+
+    /* ---------- live refresh: poll while visible, idle, and not mid-drag ---------- */
     function startPolling() {
         stopPolling();
         if (REFRESH_MS <= 0) return;
         pollTimer = setInterval(() => {
-            const modalOpen = document.querySelector(".overlay.open");
-            if (!modalOpen) load();
+            if (!document.querySelector("dialog[open]") && !dragging) load();
         }, REFRESH_MS);
     }
-    function stopPolling() {
-        if (pollTimer !== null) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-        }
-    }
-    // Don't poll a background tab; refresh and resume when it becomes visible again.
+    function stopPolling() { if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; } }
     document.addEventListener("visibilitychange", () => {
         if (REFRESH_MS <= 0) return;
-        if (document.hidden) {
-            stopPolling();
-        } else {
-            load();
-            startPolling();
-        }
+        if (document.hidden) stopPolling(); else { load(); startPolling(); }
     });
+    // Relative times ("2 min ago") age even when the listing doesn't change.
+    setInterval(() => {
+        $("rows").querySelectorAll("tr[data-path]").forEach(tr => {
+            const entry = entries.find(e => e.path === tr.dataset.path);
+            const cell = tr.querySelector(".c-mod");
+            if (entry && cell) cell.textContent = formatRelative(entry.lastModified);
+        });
+    }, 30000);
+    $("refreshInfo").textContent = REFRESH_MS > 0 ? "Auto-refresh every " + (REFRESH_MS >= 1000 ? Math.round(REFRESH_MS / 100) / 10 + " s" : REFRESH_MS + " ms") : "Auto-refresh off";
 
-    // ---- boot ----
-    renderBreadcrumb();
-    load();
+    /* ---------- boot ---------- */
+    setOffline(false);
+    openFolder(pathFromHash());
     startPolling();
 </script>
 </body>

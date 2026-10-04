@@ -9,7 +9,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
@@ -107,10 +106,11 @@ public class SftpConsoleService {
         }
         try {
             byte[] data = Files.readAllBytes(file);
-            if (isText(ct) && data.length > maxPreviewBytes) {
-                data = Arrays.copyOf(data, (int) maxPreviewBytes);
+            boolean truncated = isText(ct) && data.length > maxPreviewBytes;
+            if (truncated) {
+                data = Arrays.copyOf(data, utf8Boundary(data, (int) maxPreviewBytes));
             }
-            return new PreviewContent(true, data, ct);
+            return new PreviewContent(true, data, ct, truncated);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -157,12 +157,22 @@ public class SftpConsoleService {
         if (dst.equals(root)) {
             throw new IllegalArgumentException("Cannot overwrite the root directory");
         }
+        if (dst.equals(src)) {
+            return;
+        }
+        if (Files.isDirectory(src) && dst.startsWith(src)) {
+            throw new IllegalArgumentException("Cannot move a folder into itself: " + from);
+        }
+        // Never replace silently: a rename/move onto an existing name would destroy that file.
+        if (Files.exists(dst)) {
+            throw new ConflictException("Already exists: " + to);
+        }
         try {
             Path parent = dst.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            Files.move(src, dst, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(src, dst);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -215,6 +225,15 @@ public class SftpConsoleService {
             throw new IllegalArgumentException("Path escapes root: " + userPath);
         }
         return resolved;
+    }
+
+    /** Largest cut point {@code <= limit} that doesn't split a UTF-8 multi-byte character. */
+    private static int utf8Boundary(byte[] data, int limit) {
+        int cut = limit;
+        while (cut > 0 && cut > limit - 4 && (data[cut] & 0xC0) == 0x80) {
+            cut--;
+        }
+        return cut;
     }
 
     private Path requireFile(Path p, String original) {

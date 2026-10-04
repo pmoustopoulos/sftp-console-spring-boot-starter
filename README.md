@@ -19,13 +19,17 @@ machine. That's what this starter is.
 
 ## Features
 
-- File browser UI with breadcrumb navigation
-- Upload via drag-and-drop or file picker
+- File browser UI with breadcrumb navigation; the open folder lives in the URL (`#/inbound`), so
+  reload, Back/Forward and bookmarks work
+- Upload via drag-and-drop or file picker, with progress and a confirmation before replacing a file
 - Download any file
-- Inline preview of text and images
-- Create folder, rename, and delete (files and folders)
-- Live refresh — files your app pushes over SFTP appear automatically
-- Light/dark theme toggle, remembered across visits
+- Inline preview of text, images and PDFs, with previous/next file navigation
+- Create folder, rename, move (drag onto a folder or breadcrumb), and delete (files and folders)
+- Rename and move never overwrite silently: an existing target name is rejected (HTTP 409)
+- Filter and sort the current folder; copy a file's path or the `sftp` connect command
+- Keyboard-driven: arrows, Enter, Backspace, F2, Delete, `/` to filter, `?` for all shortcuts
+- Live refresh — files your app pushes over SFTP appear automatically (without disturbing focus)
+- Light/dark theme following the OS, with a toggle remembered across visits
 - Off by default; enabled with a single property
 - Two storage modes: **in-memory** (Jimfs heap, cleared on restart — the default) or **file** (a real
   directory on disk that persists across restarts, like H2's file mode)
@@ -80,7 +84,7 @@ Re-run `mvn clean install` whenever you change the starter's code. (Requires Jav
 <dependency>
   <groupId>io.github.pmoustopoulos</groupId>
   <artifactId>sftp-console-spring-boot-starter</artifactId>
-  <version>0.1.1</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -159,6 +163,11 @@ Spring Boot's default security auto-configuration backs off as soon as **any**
 leaving every other path unsecured. **If you rely on Boot's default security, define your own
 `SecurityFilterChain` covering the rest of your application before enabling this console.**
 Applications that already define their own security configuration are unaffected.
+
+Previews are served from your application's origin, so the console treats uploaded files as
+untrusted: text previews (including `.html`, `.js` and `.svg` source) are sent as `text/plain`,
+every preview and download carries `X-Content-Type-Options: nosniff`, and all previews except PDFs
+get a `Content-Security-Policy: sandbox` header, so an uploaded file can't run script as your app.
 
 The embedded SFTP server also generates a fresh in-memory host key on each start (no persisted
 key), which is appropriate for development only.

@@ -100,6 +100,65 @@ class SftpConsoleServiceTest {
         assertThat(preview.previewable()).isTrue();
         assertThat(preview.contentType()).isEqualTo("text/plain");
         assertThat(preview.data()).hasSize(1_000_000);
+        assertThat(preview.truncated()).isTrue();
+    }
+
+    @Test
+    void truncationNeverSplitsAMultiByteCharacter() {
+
+        service = new SftpConsoleService(fs, 4);
+        // "aé€" = 61 | C3 A9 | E2 82 AC — a 4-byte cut would land inside the euro sign
+        service.upload("/", "utf8.txt", "aé€".getBytes(StandardCharsets.UTF_8));
+
+        PreviewContent preview = service.preview("/utf8.txt");
+        assertThat(new String(preview.data(), StandardCharsets.UTF_8)).isEqualTo("aé");
+        assertThat(preview.truncated()).isTrue();
+    }
+
+    @Test
+    void smallTextPreviewIsNotTruncated() {
+        service.upload("/", "small.txt", "hi".getBytes(StandardCharsets.UTF_8));
+        assertThat(service.preview("/small.txt").truncated()).isFalse();
+    }
+
+    @Test
+    void renameRefusesToOverwriteAnExistingPath() {
+
+        service.upload("/", "a.txt", "keep me".getBytes(StandardCharsets.UTF_8));
+        service.upload("/", "b.txt", "b".getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> service.rename("/b.txt", "/a.txt"))
+                .isInstanceOf(ConflictException.class);
+        assertThat(service.download("/a.txt").data()).isEqualTo("keep me".getBytes(StandardCharsets.UTF_8));
+        assertThat(service.download("/b.txt").data()).isEqualTo("b".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void renameOntoItselfIsANoOp() {
+        service.upload("/", "a.txt", "a".getBytes(StandardCharsets.UTF_8));
+        service.rename("/a.txt", "/a.txt");
+        assertThat(service.download("/a.txt").data()).isEqualTo("a".getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void cannotMoveAFolderIntoItself() {
+
+        service.createFolder("/docs/sub");
+
+        assertThatThrownBy(() -> service.rename("/docs", "/docs/sub/docs"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.list("/docs")).extracting(FileEntry::name).containsExactly("sub");
+    }
+
+    @Test
+    void movesAFileIntoAFolder() {
+
+        service.upload("/", "a.txt", "a".getBytes(StandardCharsets.UTF_8));
+        service.createFolder("/docs");
+
+        service.rename("/a.txt", "/docs/a.txt");
+
+        assertThat(service.list("/docs")).extracting(FileEntry::name).containsExactly("a.txt");
     }
 
     @Test

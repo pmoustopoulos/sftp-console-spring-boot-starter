@@ -20,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,7 +50,19 @@ class SftpConsoleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("/sftp-console")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("__BASE_PATH__"))));
+                        org.hamcrest.Matchers.containsString("__BASE_PATH__"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("__SFTP_"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("__REFRESH_MS__"))));
+    }
+
+    @Test
+    void jsStringEscapesCharactersThatCouldBreakOutOfTheInlineScript() {
+        org.assertj.core.api.Assertions.assertThat(SftpConsoleController.jsString("a\"</script>\\"))
+                .isEqualTo("a" + "\\" + "u0022" + "\\" + "u003c/script" + "\\" + "u003e" + "\\" + "u005c")
+                .doesNotContain("<", "\"");
+        org.assertj.core.api.Assertions.assertThat(SftpConsoleController.jsString(null)).isEmpty();
     }
 
     @Test
@@ -103,6 +116,53 @@ class SftpConsoleControllerTest {
         mockMvc.perform(get("/sftp-console/api/files/preview").param("path", "/hello.txt"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN));
+    }
+
+    @Test
+    void htmlPreviewIsServedAsSandboxedPlainText() throws Exception {
+
+        service.upload("/", "page.html", "<script>alert(1)</script>".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(get("/sftp-console/api/files/preview").param("path", "/page.html"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Content-Security-Policy", org.hamcrest.Matchers.startsWith("sandbox")))
+                .andExpect(header().string(SftpConsoleController.TRUNCATED_HEADER, "false"));
+    }
+
+    @Test
+    void svgPreviewIsSandboxed() throws Exception {
+
+        service.upload("/", "logo.svg", "<svg xmlns='http://www.w3.org/2000/svg'/>".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(get("/sftp-console/api/files/preview").param("path", "/logo.svg"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/svg+xml"))
+                .andExpect(header().string("Content-Security-Policy", org.hamcrest.Matchers.startsWith("sandbox")));
+    }
+
+    @Test
+    void pdfPreviewIsNotSandboxedSoTheBrowserCanRenderIt() throws Exception {
+
+        service.upload("/", "doc.pdf", "%PDF-1.4".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(get("/sftp-console/api/files/preview").param("path", "/doc.pdf"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().doesNotExist("Content-Security-Policy"));
+    }
+
+    @Test
+    void renameOntoAnExistingNameReturns409() throws Exception {
+
+        service.upload("/", "other.txt", "x".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(post("/sftp-console/api/files/rename")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\":\"/other.txt\",\"to\":\"/hello.txt\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/hello.txt")));
     }
 
     @Test
